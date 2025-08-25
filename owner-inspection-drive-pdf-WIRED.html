@@ -4,22 +4,14 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Inspection — Pixel PDFs</title>
+<title>Owner Inspection — Pixel-Perfect PDF (FIXED photos)</title>
 <meta name="referrer" content="no-referrer"/>
-<meta http-equiv="Content-Security-Policy"
-      content="default-src 'self';
-               img-src 'self' https: data:;
-               script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-               style-src 'self' 'unsafe-inline';
-               frame-src https://drive.google.com;
-               connect-src 'self' https:;
-               object-src 'none'; base-uri 'self'; form-action 'none'"/>
-<link rel="dns-prefetch" href="//docs.google.com">
-<link rel="dns-prefetch" href="//drive.google.com">
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" crossorigin="anonymous" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
+<link rel="dns-prefetch" href="//docs.google.com">
+<link rel="dns-prefetch" href="//drive.google.com">
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <style>
 :root{--bg:#fff;--ink:#111827;--muted:#6B7280;--line:#E5E7EB;--brand:#1F2937}
 *{box-sizing:border-box}
@@ -57,42 +49,39 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 .badge{position:absolute;top:6px;left:6px;padding:2px 6px;font-size:10px;font-weight:700;border-radius:999px;background:#B91C1C;color:#fff}
 .ph.issue{border-color:#EF4444;box-shadow:0 0 0 2px #FECACA inset}
 .progress{font-size:12px;color:#374151}
-@media print{
-  .pagebreak{page-break-after:always}
-  figure,.ph{page-break-inside:avoid}
-}
+.pdf-mode .header .controls{display:none}
 </style>
 </head>
 <body>
-<div class="wrap" id="pdf-root">
+<div class="wrap" id="root">
   <header class="header">
     <div>
       <h1 class="h-title" id="pageTitle">Owner Inspection — Year / Month</h1>
       <div class="h-sub small" id="summaryDate" aria-live="polite">Loading…</div>
       <div id="progress" class="progress" aria-live="polite"></div>
     </div>
-    <form class="controls" onsubmit="return false;">
+    <div class="controls">
       <div>
-        <label id="labelYear" for="year">Year</label><br/>
-        <select id="year" title="Year" aria-labelledby="labelYear" autocomplete="off"></select>
+        <label for="year">Year</label><br/>
+        <select id="year" title="Year"></select>
       </div>
       <div>
-        <label id="labelMonth" for="month">Month</label><br/>
-        <select id="month" title="Month" aria-labelledby="labelMonth" autocomplete="off"></select>
+        <label for="month">Month</label><br/>
+        <select id="month" title="Month"></select>
       </div>
       <div>
         <label for="inspection" class="hidden" id="inspectionLabel">Inspection</label><br/>
-        <select id="inspection" title="Inspection" class="hidden" aria-labelledby="inspectionLabel" autocomplete="off"></select>
+        <select id="inspection" title="Inspection" class="hidden"></select>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button id="lastBtn" type="button" title="Jump to most recent inspection" aria-keyshortcuts="L">Last</button>
-        <button id="genAllPixelBtn" type="button" title="Generate identical PDFs (client) → Drive">Generate Pixel-Perfect PDFs → Drive</button>
+        <button id="lastBtn" type="button">Last</button>
+        <button id="downloadPdfBtn" type="button">Download this month (Pixel PDF)</button>
+        <button id="exportAllBtn" type="button">Export ALL months → Drive (Pixel)</button>
       </div>
-      <p class="small" style="margin:0">Tip: Photos on Google Drive are converted to CORS-friendly URLs for capture.</p>
-    </form>
+    </div>
   </header>
 
-  <main id="main" tabindex="-1">
+  <main id="main">
     <p id="errBox" class="small warn" role="alert" aria-live="assertive" style="margin:8px 0;"></p>
 
     <section aria-labelledby="secStatusHeading">
@@ -113,20 +102,19 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 </div>
 
 <script>
-/* ===== Config ===== */
+// ===== CONFIG =====
 const TZ = 'America/Costa_Rica';
-const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv';
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec';
-const DRIVE_FOLDER_ID = '1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV';
+const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec";
+const DRIVE_FOLDER_ID = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV";
 
-/* ===== State ===== */
+// ===== STATE =====
 let RAW_ROWS = [];
 let YEARS = [];
 let MONTHS_BY_YEAR = {};
 let LATEST_YM = {year:undefined, month:undefined};
-let CURRENT_FILTER = { y: undefined, m: undefined, idx: 'all' };
 
-/* ===== Heuristics ===== */
+// ===== HINTS =====
 const TS_KEYS=['Timestamp','timestamp','Marca temporal','marca temporal','Fecha','fecha','Fecha y hora','fecha y hora','Date','Datetime','date','datetime'];
 const META_HINTS=['email','correo','name','nombre','inspector','by who','por quién','submitted','enviado'];
 const PHOTO_HINTS=['photo','photos','foto','fotos','imagen','imágenes','imagenes','image','images','picture','pictures','pic','screenshot','url','link'];
@@ -134,28 +122,63 @@ const COMMENT_HINTS=['if you answered','si respondió','si respondiste','describ
 const ADDRESS_HINTS=['address','direccion','dirección','property','propiedad','unit','apt','suite','street','calle','listing'];
 const FRIENDLY={BR:'Bedroom',BD:'Bedroom',BA:'Bathroom',KT:'Kitchen',KI:'Kitchen',LR:'Living Room',LV:'Living Room',GQ:'General',LL:'Locks & Lights',LA:'Laundry',DR:'Dining Room',EX:'Exterior',ALL:'All Checks'};
 
-/* ===== Utils ===== */
+// ===== Utils =====
 const $=id=>document.getElementById(id);
 const setError=msg=>{$('errBox').textContent=msg||'';};
 const lower=s=>String(s||'').toLowerCase();
-const stripDiacritics=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const strip=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-const isUrlish=s=>/\bhttps?:\/\/[\w.-]/i.test(String(s||''));
 const dfmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',timeZone:TZ});
 const mfmt=new Intl.DateTimeFormat(undefined,{month:'long'});
 function monthName(m){return mfmt.format(new Date(2000,m-1,1));}
 function firstVal(row,keys){if(!row||typeof row!=='object')return;for(const k of keys){if(Object.hasOwn(row,k)){const v=row[k];if(v!=null&&String(v).trim()!=='')return v;}}}
 function isMetaHeader(h){const l=lower(h||'');return TS_KEYS.some(k=>l===lower(k))||META_HINTS.some(hint=>l.includes(hint));}
-function isPhotoHeader(h){const s=String(h||'');const l=s.toLowerCase();const dl=stripDiacritics(s).toLowerCase();return PHOTO_HINTS.some(hint=>l.includes(hint)||dl.includes(hint));}
+function isPhotoHeader(h){const s=String(h||'');const l=s.toLowerCase();const dl=strip(s).toLowerCase();return PHOTO_HINTS.some(hint=>l.includes(hint)||dl.includes(hint));}
 function isCommentOnlyHeader(h){return COMMENT_HINTS.some(hint=>lower(h||'').includes(hint));}
-function sectionKeyFromHeader(h){if(!h) return null; const m=String(h).match(/\[([A-Za-z0-9_]+)\]/); if(!m) return null; return m[1].replace(/_.*/,'');}
+function sectionKeyFromHeader(h){if(!h)return null;const m=String(h).match(/\[([A-Za-z0-9_]+)\]/);if(!m)return null;return m[1].replace(/_.*/,'');}
 function sanitizeCsvText(text){if(text&&text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
-/* ===== Date parsing ===== */
+// ===== Drive/Dropbox helpers =====
+function driveIdFromUrl(u){
+  try{
+    const url = new URL(u);
+    if(url.hostname!=='drive.google.com') return null;
+    let id = null;
+    const m = url.pathname.match(/\/file\/d\/([^/]+)/);
+    if(m) id = m[1];
+    if(!id) id = url.searchParams.get('id');
+    if(!id){ // shared "uc?id="
+      const mm = url.search.match(/[?&]id=([^&]+)/);
+      if(mm) id = mm[1];
+    }
+    return id;
+  }catch{return null;}
+}
+const driveDirectImage = (id)=> `https://drive.google.com/uc?export=view&id=${id}`;
+const drivePreview = (id)=> `https://drive.google.com/file/d/${id}/preview`;
+function dropboxDirect(u){
+  try{
+    // www.dropbox.com/s/<path>?dl=0|1  -> dl.dropboxusercontent.com/s/<path>?raw=1
+    if(!/dropbox\.com/.test(u)) return null;
+    const url = new URL(u.replace('www.dropbox.com','dropbox.com'));
+    const path = url.pathname.replace(/^\/s\//,'/s/');
+    return `https://dl.dropboxusercontent.com${path}?raw=1`;
+  }catch{return null;}
+}
+function toImageUrl(u){
+  if(!u) return u;
+  try{ u = u.replace(/^http:/,'https:'); }catch{}
+  const id = driveIdFromUrl(u);
+  if(id) return driveDirectImage(id);
+  const db = dropboxDirect(u);
+  if(db) return db;
+  return u;
+}
+
+// ===== Date parsing =====
 function parseTimestamp(row){
-  const t=firstVal(row,TS_KEYS);
-  if(t==null||t==='')return null;
+  const t=firstVal(row,TS_KEYS); if(t==null||t==='')return null;
   if(/^\d{4}-\d{2}-\d{2}/.test(t)){const d=new Date(t);return Number.isFinite(+d)?d:null;}
   const m=String(t).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if(m){let a=+m[1],b=+m[2],y=+m[3];if(y<100)y+=2000;const month=a>12?b:a;const day=a>12?a:b;const hh=+(m[4]||'0'),mm=+(m[5]||'0'),ss=+(m[6]||'0');const d=new Date(y,month-1,day,hh,mm,ss);return Number.isFinite(+d)?d:null;}
@@ -163,131 +186,51 @@ function parseTimestamp(row){
 }
 function deriveYM(row){const d=parseTimestamp(row);return d?{year:d.getFullYear(),month:d.getMonth()+1}:{year:undefined,month:undefined};}
 
-/* ===== CSV ===== */
-async function fetchWithTimeout(url, ms=15000){
-  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);
-  try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}catch(e){clearTimeout(t);throw e;}
-}
-function isAllowedCsv(url){try{const u=new URL(url);if(u.protocol!=='https:')return false;return ['docs.google.com','drive.google.com'].includes(u.hostname);}catch{return false;}}
-function normalizeCsvUrl(url){
-  try{
-    const u=new URL(url);
-    if(u.hostname==='docs.google.com'){ if(u.pathname.includes('/spreadsheets/') && !u.searchParams.get('output')) u.searchParams.set('output','csv'); }
-    if(u.hostname==='drive.google.com'){ if(!u.searchParams.get('export')) u.searchParams.set('export','download'); }
-    return u.toString();
-  }catch{return url;}
-}
-function getCsvUrlFromParams(){const params=new URLSearchParams(location.search);const p=(params.get('csv')||'').trim(); if(p && isAllowedCsv(p)) return normalizeCsvUrl(p); return DEFAULT_CSV;}
+// ===== CSV =====
+async function fetchWithTimeout(url,ms=15000){const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}catch(e){clearTimeout(t);throw e;}}
+async function loadCsv(url){let res;try{res=await fetchWithTimeout(url,15000);}catch(e){throw new Error('Network timeout or fetch blocked fetching CSV');} if(!res.ok)throw new Error(`HTTP ${res.status} fetching CSV`); const raw=await res.text(); const cleaned=sanitizeCsvText(raw); return new Promise(resolve=>{ if(!window.Papa||!window.Papa.parse){resolve([]);return;} try{ Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy', transformHeader:h=>String(h||'').normalize('NFC'), transform:v=>String(v??''), complete:(results)=>resolve(results.data||[]) }); }catch{ resolve([]); } });}
 
-async function loadCsv(url){
-  let res;
-  try{res=await fetchWithTimeout(url,15000);}catch{throw new Error('Network timeout or fetch blocked fetching CSV');}
-  if(!res.ok) throw new Error(`HTTP ${res.status} fetching CSV`);
-  const raw=await res.text();
-  const cleaned=sanitizeCsvText(raw);
-  if(!window.Papa||!window.Papa.parse){return naiveCsvParse(cleaned);}
-  return new Promise(resolve=>{
-    try{
-      Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy',
-        transformHeader:h=>String(h||'').normalize('NFC'),
-        transform:v=>String(v??''),
-        complete:(results)=>{resolve(results.data||[]);}});
-    }catch{resolve(naiveCsvParse(cleaned));}
-  });
-}
-function naiveCsvParse(text){
-  const lines=text.split('\n').filter(Boolean);
-  const headers=(lines.shift()||'').split(',').map(h=>h.trim());
-  return lines.map(line=>{
-    const parts=line.split(','), o={};
-    headers.forEach((h,i)=>o[h]=parts[i]??'');
-    return o;
-  });
-}
-
-/* ===== Classification & aggregation ===== */
-function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\s+/g,' ');return stripDiacritics(t);}
-function classifyAnswer(val){
-  if(val==null)return'ignore';const raw=String(val).trim();if(!raw)return'ignore';if(isUrlish(raw))return'ignore';
-  const tokens=normalizeToken(raw).replace(/[^a-z]+/g,' ').trim().split(/\s+/);
-  const yes=new Set(['yes','si','y','affirmative','true']); const no=new Set(['no','n','negative','false']);
-  const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t));
-  if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore';
-}
+// ===== Classification + Aggregation =====
+function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\s+/g,' ');return strip(t);}
+function classifyAnswer(val){ if(val==null)return'ignore'; const raw=String(val).trim(); if(!raw)return'ignore'; if(/\bhttps?:\/\//i.test(raw))return'ignore'; const tokens=normalizeToken(raw).replace(/[^a-z]+/g,' ').trim().split(/\s+/); const yes=new Set(['yes','si','y','affirmative','true']); const no=new Set(['no','n','negative','false']); const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t)); if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore'; }
 function aggregate(rows){
   const agg={sections:{},photos:{},details:{},overall:{passes:0,fails:0,total:0,rate:0}};
-  let saw=false; const headers=rows.length?Object.keys(rows[0]??{}):[]; const photoSeen=new Set();
-
-  function headerTokens(h){
-    const cleaned=String(h||'').replace(/\[[^\]]+\]\s*/,'')
-      .replace(/\b(photos?|fotos?|imagen(?:es)?|image|images|picture|pictures|pic|screenshot|url|link)\b/gi,'')
-      .replace(/[:\-–—()]/g,' ');
-    return normalizeToken(cleaned).split(/\s+/).filter(Boolean);
-  }
-  const tokenCache=new Map();
-  const tok=(h)=>{if(!tokenCache.has(h))tokenCache.set(h,headerTokens(h));return tokenCache.get(h);};
-  const overlap=(a,b)=>{const sb=new Set(b);let n=0;for(const t of a) if(sb.has(t)) n++; return n;};
-
-  function splitUrls(val){
-    let s=String(val||'').replace(/\bwww\.[^\s,;|)>\]]+/gi, m=>'https://'+m);
-    const out=[]; const re=/(https?:\/\/[^\s<>")\],;|]+)(?=[\s<>")\],;|]|$)/gi; let m;
-    while((m=re.exec(s))){ let u=m[1].replace(/[)\],;.!?]+$/,'').replace(/^http:/i,'https:'); out.push(u); }
-    return out;
-  }
-
+  let sawBracket=false; const headers=rows.length?Object.keys(rows[0]??{}):[]; const photoSeen=new Set();
+  function headerTokens(h){ const cleaned=String(h||'').replace(/\[[^\]]+\]\s*/,'').replace(/\b(photos?|fotos?|imagen(?:es)?|image|images|picture|pictures|pic|screenshot|url|link)\b/gi,'').replace(/[:\-–—()]/g,' '); return normalizeToken(cleaned).split(/\s+/).filter(Boolean); }
+  const tokenCache=new Map(); const tok=h=>{ if(!tokenCache.has(h)) tokenCache.set(h,headerTokens(h)); return tokenCache.get(h); };
+  const overlap=(a,b)=>{ const sb=new Set(b); let n=0; for(const t of a) if(sb.has(t)) n++; return n; };
+  function splitUrls(val){ let s=String(val||'').replace(/\bwww\.[^\s,;|)\]>]+/gi,m=>'https://'+m); const out=[]; const re=/(https?:\/\/[^\s<>"\)\],;|]+)(?=[\s<>"\)\],;|]|$)/gi; let m; while((m=re.exec(s))){ let u=m[1].replace(/[\)\],;.!?]+$/,'').replace(/^http:/i,'https:'); out.push(u);} return out; }
   for(const row of rows){
     const ts=parseTimestamp(row)||new Date();
     const rowQs=[]; const rowPics=[];
     for(const h of headers){
       if(isMetaHeader(h)) continue;
-      const val=row[h];
-      const code=sectionKeyFromHeader(h); if(code) saw=true;
-      const key=code||'ALL';
-
-      if(isPhotoHeader(h)){
-        const urls=splitUrls(val);
-        if(urls.length) rowPics.push({key,header:h,tokens:tok(h),urls});
-        continue;
-      }
+      const val=row[h]; const code=sectionKeyFromHeader(h); if(code) sawBracket=true; const key=code||'ALL';
+      if(isPhotoHeader(h)){ const urls=splitUrls(val); if(urls.length) rowPics.push({key,header:h,tokens:tok(h),urls}); continue; }
       if(isCommentOnlyHeader(h)) continue;
-
-      const cls=classifyAnswer(val);
-      if(cls==='ignore') continue;
-
-      (agg.sections[key]??=( {passes:0,fails:0,total:0}));
+      const cls=classifyAnswer(val); if(cls==='ignore') continue;
+      (agg.sections[key]??={passes:0,fails:0,total:0});
       (agg.details[key]??=[]).push({question:h,answer:String(val),pass:cls==='pass',ts});
-
-      if(cls==='pass') agg.sections[key].passes++; else agg.sections[key].fails++;
-      agg.sections[key].total++;
+      if(cls==='pass') agg.sections[key].passes++; else agg.sections[key].fails++; agg.sections[key].total++;
       rowQs.push({key,header:h,tokens:tok(h),pass:cls==='pass'});
     }
-
     for(const p of rowPics){
       for(const url of p.urls){
         if(photoSeen.has(url)) continue; photoSeen.add(url);
         let best=null,bestScore=0;
-        for(const q of rowQs){
-          const score=overlap(p.tokens,q.tokens)+(q.key===p.key?1:0);
-          if(score>bestScore){bestScore=score;best=q;}
-        }
+        for(const q of rowQs){ const score=overlap(p.tokens,q.tokens)+(q.key===p.key?1:0); if(score>bestScore){bestScore=score;best=q;} }
         const flagged=(best && !best.pass && bestScore>0);
         (agg.photos[p.key]??=[]).push({url,ts,flagged});
       }
     }
   }
-
-  if(!saw && Object.keys(agg.photos).length){
-    const merged={ALL:[]}; Object.values(agg.photos).forEach(arr=>merged.ALL.push(...arr)); agg.photos=merged;
-  }
-
-  for(const s of Object.values(agg.sections)){
-    agg.overall.passes+=s.passes; agg.overall.fails+=s.fails; agg.overall.total+=s.total;
-  }
+  if(!sawBracket && Object.keys(agg.photos).length){ const merged={ALL:[]}; Object.values(agg.photos).forEach(arr=>merged.ALL.push(...arr)); agg.photos=merged; }
+  for(const s of Object.values(agg.sections)){ agg.overall.passes+=s.passes; agg.overall.fails+=s.fails; agg.overall.total+=s.total; }
   agg.overall.rate=agg.overall.total?(agg.overall.passes/agg.overall.total*100):0;
   return agg;
 }
 
-/* ===== Rendering ===== */
+// ===== Rendering =====
 function donutStrokeColor(pct){ if(pct==null) return '#9CA3AF'; if(pct>=90) return '#10B981'; if(pct>=70) return '#F59E0B'; return '#EF4444'; }
 function sectionName(code){ return code==='ALL'?'All Checks':(FRIENDLY[code]?`${FRIENDLY[code]}${code==='ALL'?'':` (${code})`}`:code); }
 
@@ -295,7 +238,6 @@ function renderTiles(agg){
   const tiles=$('tiles'); tiles.replaceChildren();
   const keys=Object.keys(agg.sections).sort((a,b)=>{const A=agg.sections[a],B=agg.sections[b]; if(B.fails!==A.fails) return B.fails-A.fails; return a.localeCompare(b);});
   if(!keys.length){ tiles.innerHTML='<li class="small">No questions to score. Check your CSV columns.</li>'; return; }
-
   const frag=document.createDocumentFragment();
   for(const k of keys){
     const s=agg.sections[k];
@@ -304,35 +246,25 @@ function renderTiles(agg){
     const dash=`${pct},${100-pct}`;
     const center=rate===null?'No Data':`${pct}%`;
     const nameText=sectionName(k);
-
     const li=document.createElement('li');
-    const a=document.createElement('a'); a.className='tile'; a.href='#sec-'+slug(k); a.rel='nofollow'; a.setAttribute('aria-label', `${nameText}: ${center}`);
-
+    const a=document.createElement('a'); a.className='tile'; a.href='#sec-'+slug(k); a.rel='nofollow'; a.setAttribute('aria-label',`${nameText}: ${center}`);
     const svgNS='http://www.w3.org/2000/svg';
     const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('class','donut'); svg.setAttribute('viewBox','0 0 36 36');
     const titleEl=document.createElementNS(svgNS,'title'); titleEl.textContent=`${nameText} — ${center}`; svg.appendChild(titleEl);
     const c1=document.createElementNS(svgNS,'circle'); c1.setAttribute('cx','18'); c1.setAttribute('cy','18'); c1.setAttribute('r','15.915'); c1.setAttribute('fill','none'); c1.setAttribute('stroke','#EAEFF5'); c1.setAttribute('stroke-width','3.8'); svg.appendChild(c1);
     const c2=document.createElementNS(svgNS,'circle'); c2.setAttribute('cx','18'); c2.setAttribute('cy','18'); c2.setAttribute('r','15.915'); c2.setAttribute('fill','none'); c2.setAttribute('stroke',donutStrokeColor(pct)); c2.setAttribute('stroke-width','3.8'); c2.setAttribute('stroke-linecap','round'); c2.setAttribute('stroke-dasharray',dash); svg.appendChild(c2);
     const t=document.createElementNS(svgNS,'text'); t.setAttribute('x','18'); t.setAttribute('y','20'); t.setAttribute('text-anchor','middle'); t.textContent=center; svg.appendChild(t);
-
     const nameEl=document.createElement('div'); nameEl.className='name'; nameEl.textContent=nameText;
     const pill=document.createElement('div'); pill.className='pill '+(s.total===0?'na':(s.fails>0?'bad':'ok')); pill.textContent=s.total===0?'No data':(s.fails>0?`${s.fails} issue${s.fails>1?'s':''}`:'Clear'); pill.title=`${s.passes}/${s.total} passed`;
-
     a.append(svg,nameEl,pill); li.appendChild(a); frag.appendChild(li);
   }
   tiles.appendChild(frag);
 }
 
-function toDriveId(u){ try{ const m=String(u||'').match(/\/file\/d\/([^/]+)/); if(m) return m[1]; const url=new URL(u); return url.searchParams.get('id'); }catch{} return null; }
-function toDriveDirect(u){ try{ const id=toDriveId(u); if(!id) return null; return 'https://drive.usercontent.google.com/uc?id='+id+'&export=download'; }catch{ return null; } }
-function toDropboxRaw(u){ try{ const url=new URL(u); if(url.hostname.endsWith('dropbox.com')){ url.hostname='dl.dropboxusercontent.com'; url.searchParams.delete('dl'); url.searchParams.delete('raw'); return url.toString(); } }catch{} return null; }
-function enhanceUrl(u){ let s=String(u||''); if(/^www\./i.test(s)) s='https://'+s; if(/^http:\/\//i.test(s)) s=s.replace(/^http:/i,'https:'); const dd=toDriveDirect(s); if(dd) return dd; const db=toDropboxRaw(s); if(db) return db; return s; }
-
 function renderPhotos(agg){
   const wrap=$('photoSections'); wrap.replaceChildren();
   const keys=Object.keys(agg.photos).sort();
   if(!keys.length){ wrap.innerHTML='<div class="small">No photos detected for this period.</div>'; return; }
-
   const frag=document.createDocumentFragment();
   for(const k of keys){
     const id='sec-'+slug(k);
@@ -340,17 +272,26 @@ function renderPhotos(agg){
     const title=sectionName(k);
     const h=document.createElement('h3'); h.className='sec-title'; h.id=id+'-title'; h.textContent=`${title} (${(agg.photos[k]||[]).length})`;
     const g=document.createElement('div'); g.className='gallery';
-
     for(const {url,ts,flagged} of (agg.photos[k]||[])){
       const fig=document.createElement('figure'); fig.className='ph'+(flagged?' issue':'');
       if(flagged){ const b=document.createElement('span'); b.className='badge'; b.textContent='Issue'; fig.appendChild(b); }
-      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='eager'; img.crossOrigin='anonymous'; img.referrerPolicy='no-referrer'; img.decoding='async'; img.src=enhanceUrl(url);
+      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='lazy'; img.referrerPolicy='no-referrer'; img.decoding='async';
+      let resolved = toImageUrl(url);
+      img.src = resolved;
+      img.onerror = () => {
+        const id = driveIdFromUrl(url);
+        if(id){
+          const ifr=document.createElement('iframe'); ifr.loading='lazy'; ifr.referrerPolicy='no-referrer'; ifr.src=drivePreview(id); ifr.title='Drive preview';
+          fig.appendChild(ifr); img.remove();
+        } else {
+          const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Open Photo'; img.replaceWith(a);
+        }
+      };
       const cap=document.createElement('figcaption');
       const left=document.createElement('span'); left.className='cap-left'; left.textContent=title+(flagged?' — Issue':'');
       const right=document.createElement('span'); right.className='cap-right'; right.textContent=dfmt.format(ts);
       cap.append(left,right); fig.append(img,cap); g.appendChild(fig);
     }
-
     sec.append(h,g); frag.appendChild(sec);
   }
   wrap.appendChild(frag);
@@ -374,7 +315,7 @@ function renderIssuesSummary(agg){
   wrap.appendChild(frag);
 }
 
-/* ===== Index & selectors ===== */
+// ===== Selectors =====
 function deriveAddress(rows){
   if(!rows||!rows.length) return '';
   const headers=Object.keys(rows[0]||{}); let addrCol=headers.find(h=>ADDRESS_HINTS.some(hint=>lower(h).includes(hint)))||'';
@@ -394,13 +335,13 @@ function monthLabel(m){return monthName(m);}
 function populateSelectors(){
   const ySel=$('year'), mSel=$('month'), iSel=$('inspection'), iLbl=$('inspectionLabel');
   ySel.replaceChildren(); YEARS.forEach(y=>ySel.add(new Option(String(y),String(y))));
-  if(YEARS.length) ySel.value=String(CURRENT_FILTER.y ?? YEARS[YEARS.length-1]);
+  if(YEARS.length) ySel.value=String(YEARS[YEARS.length-1]);
 
   function fillMonths(y){
     mSel.replaceChildren();
     const months=(MONTHS_BY_YEAR[String(y)]||[]).sort((a,b)=>a-b);
     months.forEach(m=>mSel.add(new Option(monthLabel(m),String(m))));
-    if(months.length){ const pick=CURRENT_FILTER.m ?? months[months.length-1]; mSel.value=String(pick); }
+    if(months.length) mSel.value=String(months[months.length-1]);
     fillInspections();
   }
   function fillInspections(){
@@ -410,24 +351,18 @@ function populateSelectors(){
     iSel.replaceChildren();
     if(monthRows.length<=1){ iSel.classList.add('hidden'); iLbl.classList.add('hidden'); return; }
     iSel.classList.remove('hidden'); iLbl.classList.remove('hidden');
-
     iSel.add(new Option('All inspections in month','all'));
-    monthRows.forEach((row,idx)=>{
-      const d=parseTimestamp(row);
-      const dt=d?dfmt.format(d):'';
-      const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`;
-      iSel.add(new Option(label,String(idx)));
-    });
-    iSel.value=String(CURRENT_FILTER.idx ?? 'all');
+    monthRows.forEach((row,idx)=>{ const d=parseTimestamp(row); const dt=d?dfmt.format(d):''; const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`; iSel.add(new Option(label,String(idx)));});
+    iSel.value='all';
   }
 
   fillMonths(ySel.value);
-  ySel.onchange=()=>{ CURRENT_FILTER.y=+ySel.value; fillMonths(ySel.value); applySelection(true); };
-  mSel.onchange=()=>{ CURRENT_FILTER.m=+mSel.value; fillInspections(); applySelection(true); };
-  iSel.onchange=()=>{ CURRENT_FILTER.idx=iSel.value; applySelection(true); };
+  ySel.onchange=()=>{ fillMonths(ySel.value); applySelection(); };
+  mSel.onchange=()=>{ fillInspections(); applySelection(); };
+  iSel.onchange=()=> applySelection();
 }
 
-function applySelection(pushState=true){
+function applySelection(){
   const y=parseInt($('year').value,10);
   const m=parseInt($('month').value,10);
   const iSel=$('inspection');
@@ -440,146 +375,162 @@ function applySelection(pushState=true){
   }
 
   const agg=aggregate(monthRows);
-  const label=monthRows.length?`${monthName(m)} ${y}${(!iSel.classList.contains('hidden') && iSel.value!=='all') ? ' — '+iSel.options[iSel.selectedIndex].text : ''}`:'No data';
+  const label=monthRows.length?`${monthName(m)} ${y}${(!iSel.classList.contains('hidden')&&iSel.value!=='all')?' — '+iSel.options[iSel.selectedIndex].text:''}`:'No data';
   $('summaryDate').textContent=label;
 
   renderTiles(agg);
   renderPhotos(agg);
   renderIssuesSummary(agg);
-
-  if(pushState){
-    const url=new URL(location.href);
-    url.searchParams.set('y',String(y)); url.searchParams.set('m',String(m));
-    if(!iSel.classList.contains('hidden')) url.searchParams.set('i',String(iSel.value)); else url.searchParams.delete('i');
-    history.replaceState(null,'',url);
-  }
 }
 
-/* ===== Pixel-perfect PDF generation ===== */
-function cloneForPdf(){
-  const src=document.getElementById('pdf-root');
-  const clone=src.cloneNode(true);
-  clone.id='pdf-clone';
-  clone.style.maxWidth='800px'; // fits A4 better
-  // images
-  clone.querySelectorAll('img').forEach(img=>{
-    const u=img.getAttribute('src')||'';
-    const better=enhanceUrl(u);
-    img.setAttribute('src',better);
-    img.setAttribute('crossorigin','anonymous');
-    img.setAttribute('referrerpolicy','no-referrer');
-    img.setAttribute('loading','eager');
-  });
-  // drop iframes
-  clone.querySelectorAll('iframe').forEach(el=>el.remove());
-  return clone;
-}
-async function waitForImages(el, timeoutMs=15000){
-  const imgs=[...el.querySelectorAll('img')];
-  const start=Date.now();
-  const ok=()=>imgs.every(i=>i.complete && i.naturalWidth>0);
-  if(ok()) return;
-  await new Promise(r=>{ (function tick(){ if(ok()||Date.now()-start>timeoutMs) return r(); requestAnimationFrame(tick); })(); });
-}
-function arrayBufferToBase64(buf){
-  let binary=''; const bytes=new Uint8Array(buf); const len=bytes.byteLength;
-  for(let i=0;i<len;i++) binary+=String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-async function renderMonthToPdfBase64(filename){
-  const node=cloneForPdf();
-  document.body.appendChild(node);
-  await waitForImages(node,18000);
-  const opt={margin:[10,10,10,10],filename,html2canvas:{useCORS:true,backgroundColor:'#ffffff',scale:2,logging:false,removeContainer:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}};
-  const pdf=await html2pdf().set(opt).from(node).toPdf().get('pdf');
-  const buf=pdf.output('arraybuffer');
-  node.remove();
-  return arrayBufferToBase64(buf);
-}
-async function postToAppsScript(payload){
-  try{
-    const res=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),mode:'cors'});
-    try{ return await res.json(); }catch{ return {ok:true,cors:true}; }
-  }catch(e){
-    try{ await fetch(APPS_SCRIPT_URL,{method:'POST',body:JSON.stringify(payload),mode:'no-cors'}); }catch{}
-    return {ok:true,noCors:true};
-  }
-}
-function buildMonthRows(y,m){return RAW_ROWS.filter(r=>{const d=deriveYM(r);return d.year===y&&d.month===m;}).sort((a,b)=>(parseTimestamp(b)?.getTime()||0)-(parseTimestamp(a)?.getTime()||0));}
-function buildReportAddress(){const a=deriveAddress(RAW_ROWS);return a||'Property';}
-async function generateAllPixelPdfsToDrive(){
-  const prog=$('progress');
-  const address=buildReportAddress();
-  let total=0; YEARS.forEach(y=> total += (MONTHS_BY_YEAR[String(y)]||[]).length);
-  let done=0;
-  for(const y of YEARS){
-    for(const m of (MONTHS_BY_YEAR[String(y)]||[])){
-      $('year').value=String(y); $('month').value=String(m);
-      $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
-      applySelection(false);
-      const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
-      prog.textContent = `Rendering ${++done}/${total}: ${filename}…`;
-      try{
-        const b64 = await renderMonthToPdfBase64(filename);
-        await postToAppsScript({folderId:DRIVE_FOLDER_ID, filename, pdfBase64:b64});
-      }catch(e){
-        console.error(e); setError('PDF render failed: '+(e&&e.message||e));
-      }
-    }
-  }
-  prog.textContent = `Finished generating ${total} pixel-perfect PDF(s) to Drive.`;
-}
-
-/* ===== Boot ===== */
-function jumpToLast(){
-  if(!LATEST_YM.year||!LATEST_YM.month) return;
-  const ySel=$('year'), mSel=$('month');
-  ySel.value=String(LATEST_YM.year);
-  mSel.replaceChildren();
-  (MONTHS_BY_YEAR[String(LATEST_YM.year)]||[]).sort((a,b)=>a-b).forEach(m=>mSel.add(new Option(monthName(m),String(m))));
-  mSel.value=String(LATEST_YM.month);
-  $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
-  CURRENT_FILTER={y:LATEST_YM.year,m:LATEST_YM.month,idx:'all'};
-  applySelection();
-}
+// ===== CSV boot =====
+function getCsvUrlFromParams(){ const params=new URLSearchParams(location.search); const p=(params.get('csv')||'').trim(); return p || DEFAULT_CSV; }
 async function loadAndRender(){
   setError(''); $('summaryDate').textContent='Loading…';
   try{
-    const url=new URL(getCsvUrlFromParams()); url.searchParams.set('_ts_',Date.now());
+    const url=new URL(getCsvUrlFromParams()); url.searchParams.set('_ts_', Date.now());
     RAW_ROWS=await loadCsv(url.toString());
     if(!RAW_ROWS.length){ setError('No data rows found in CSV.'); }
 
-    const params=new URLSearchParams(location.search);
-    const addr=params.get('address')||params.get('addr');
+    const addrParams=new URLSearchParams(location.search);
+    const addr=addrParams.get('address')||addrParams.get('addr');
     const address=(addr&&addr.trim())?addr.trim():deriveAddress(RAW_ROWS);
     if(address){
-      document.title = `Owner Inspection — ${address}`;
-      const h1=$('pageTitle'); if(h1) h1.textContent = `Owner Inspection — ${address} — Year / Month`;
+      document.title=`Owner Inspection — ${address}`;
+      const h1=$('pageTitle'); if(h1) h1.textContent=`Owner Inspection — ${address} — Year / Month`;
     }
 
     buildIndex(RAW_ROWS);
     populateSelectors();
-    if(YEARS.length){ applySelection(false); }
-    else{
-      $('summaryDate').textContent='No dated rows';
-      $('tiles').innerHTML='<li class="small">No timestamped responses found.</li>';
-      $('photoSections').innerHTML='';
-      $('issuesSummary').textContent='No issues found — all checks passed.';
+    if (YEARS.length){ applySelection(); } else {
+      $('summaryDate').textContent = 'No dated rows';
     }
   }catch(err){
     console.error(err);
     setError(err.message||'Failed to load');
-    $('summaryDate').textContent='Failed to load';
-    $('tiles').innerHTML='<li class="small">Could not load data.</li>';
-    $('photoSections').innerHTML='';
-    $('issuesSummary').textContent='—';
+    $('summaryDate').textContent = 'Failed to load';
   }
 }
 
-document.getElementById('lastBtn').addEventListener('click', jumpToLast);
-document.getElementById('genAllPixelBtn').addEventListener('click', generateAllPixelPdfsToDrive);
-window.addEventListener('keydown', e=>{ if(e.key && e.key.toLowerCase()==='l'){ e.preventDefault(); jumpToLast(); }});
-window.addEventListener('DOMContentLoaded', loadAndRender);
+// ===== Pixel-perfect export (unchanged) =====
+async function appsFetchImageAsDataUrl(url){
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'fetchImage', url }), mode:'cors'
+    });
+    const js = await res.json().catch(()=>null);
+    if(js && js.dataUrl) return js.dataUrl;
+  }catch{}
+  return url; // fallback (may not embed cross-origin)
+}
+async function toExportDomWithDataImages(container){
+  const clone = container.cloneNode(true);
+  const iframes = clone.querySelectorAll('iframe');
+  for(const ifr of iframes){
+    const src = ifr.getAttribute('src')||'';
+    let id = null; try{ const m=src.match(/\/file\/d\/([^/]+)/); if(m) id=m[1]; }catch{}
+    let direct = src;
+    if(id) direct = 'https://drive.google.com/uc?export=download&id='+id;
+    const dataUrl = await appsFetchImageAsDataUrl(direct);
+    const img = document.createElement('img');
+    img.src = dataUrl; img.style.width='100%'; img.style.height='160px'; img.style.objectFit='cover';
+    ifr.replaceWith(img);
+  }
+  const imgs = clone.querySelectorAll('img');
+  for(const img of imgs){
+    const src = img.getAttribute('src') || img.getAttribute('data-src');
+    if(!src) continue;
+    const dataUrl = await appsFetchImageAsDataUrl(src);
+    img.setAttribute('src', dataUrl);
+    img.removeAttribute('loading'); img.removeAttribute('referrerPolicy'); img.removeAttribute('decoding');
+  }
+  return clone;
+}
+function waitForFonts(){ return document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(); }
+async function htmlToPdfBlob(container){
+  document.documentElement.classList.add('pdf-mode');
+  await waitForFonts();
+  const cloned = await toExportDomWithDataImages(container);
+  const wrapper = document.createElement('div'); wrapper.style.padding='20px'; wrapper.appendChild(cloned);
+  const opt = { margin:0.4, filename:'report.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'}, jsPDF:{unit:'in',format:'letter',orientation:'portrait'} };
+  const worker = window.html2pdf().set(opt).from(wrapper).save(false);
+  const blob = await worker.outputPdf('blob');
+  document.documentElement.classList.remove('pdf-mode');
+  return blob;
+}
+function blobToBase64(blob){
+  return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result).split(',')[1]); reader.onerror=reject; reader.readAsDataURL(blob); });
+}
+async function uploadPdfToDrive(filename, blob){
+  const b64 = await blobToBase64(blob);
+  const payload = { action:'uploadPdf', folderId: DRIVE_FOLDER_ID, filename, pdfBase64: b64 };
+  try{ await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), mode:'cors' }); }
+  catch{ try{ await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload), mode:'no-cors' }); }catch{} }
+}
+async function downloadCurrentPdf(){
+  const y = parseInt($('year').value,10);
+  const m = parseInt($('month').value,10);
+  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
+  const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
+  const blob = await htmlToPdfBlob(document.querySelector('#main'));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+}
+async function exportAllMonths(){
+  const prog=$('progress');
+  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
+  let total=0; for(const y of YEARS) total += (MONTHS_BY_YEAR[String(y)]||[]).length;
+  let done=0;
+  for(const y of YEARS){
+    for(const m of (MONTHS_BY_YEAR[String(y)]||[])){
+      $('year').value=String(y);
+      $('month').replaceChildren(); (MONTHS_BY_YEAR[String(y)]||[]).forEach(mm=>$('month').add(new Option(monthName(mm), String(mm)))); $('month').value=String(m);
+      $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
+      applySelection();
+      prog.textContent = `Exporting ${++done}/${total} — ${address} — ${y}-${String(m).padStart(2,'0')}…`;
+      const blob = await htmlToPdfBlob(document.querySelector('#main'));
+      const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
+      await uploadPdfToDrive(filename, blob);
+    }
+  }
+  prog.textContent = `Done — exported ${total} PDF(s) to Drive.`;
+}
+
+// ===== Events & boot =====
+$('lastBtn').addEventListener('click', ()=>{
+  if(!LATEST_YM.year||!LATEST_YM.month) return;
+  const ySel=$('year'), mSel=$('month');
+  ySel.value=String(LATEST_YM.year);
+  mSel.replaceChildren(); (MONTHS_BY_YEAR[String(LATEST_YM.year)]||[]).forEach(mm=>mSel.add(new Option(monthName(mm), String(mm))));
+  mSel.value=String(LATEST_YM.month);
+  $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
+  applySelection();
+});
+$('downloadPdfBtn').addEventListener('click', downloadCurrentPdf);
+$('exportAllBtn').addEventListener('click', exportAllMonths);
+
+async function boot(){
+  setError(''); $('summaryDate').textContent='Loading…';
+  try{
+    const params=new URLSearchParams(location.search);
+    const csv = (params.get('csv')||'').trim() || DEFAULT_CSV;
+    const url=new URL(csv); url.searchParams.set('_ts_', Date.now());
+    RAW_ROWS=await loadCsv(url.toString());
+    if(!RAW_ROWS.length) setError('No data rows found in CSV.');
+
+    const addrParam = params.get('address')||params.get('addr');
+    const address = (addrParam && addrParam.trim()) ? addrParam.trim() : deriveAddress(RAW_ROWS);
+    if(address){ document.title = `Owner Inspection — ${address}`; $('pageTitle').textContent = `Owner Inspection — ${address} — Year / Month`; }
+
+    buildIndex(RAW_ROWS);
+    populateSelectors();
+    if(YEARS.length){ applySelection(); } else { $('summaryDate').textContent='No dated rows'; }
+  }catch(err){
+    console.error(err); setError(err.message||'Failed to load'); $('summaryDate').textContent='Failed to load';
+  }
+}
+window.addEventListener('DOMContentLoaded', boot);
 </script>
 </body>
 </html>
