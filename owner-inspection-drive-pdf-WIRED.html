@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Inspection — Live</title>
+<title>Owner Inspection — Pixel PDFs</title>
 <meta name="referrer" content="no-referrer"/>
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self';
@@ -19,9 +19,9 @@
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" crossorigin="anonymous" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
 <style>
 :root{--bg:#fff;--ink:#111827;--muted:#6B7280;--line:#E5E7EB;--brand:#1F2937}
-html{color-scheme: light;}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto}
@@ -54,28 +54,24 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 .donut{width:72px;height:72px}
 .tile svg text{font-size:6px;font-weight:800;fill:#111827}
 .hidden{display:none}
-.skip-link{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
-.skip-link:focus{position:static;width:auto;height:auto;padding:8px;border:1px solid var(--line);background:#fff;border-radius:8px}
-.issues{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
-.issues h3{margin:10px 0 6px;font-size:14px}
-.issues ul{margin:0 0 8px 16px;padding:0}
-.issues li{margin:2px 0}
 .badge{position:absolute;top:6px;left:6px;padding:2px 6px;font-size:10px;font-weight:700;border-radius:999px;background:#B91C1C;color:#fff}
 .ph.issue{border-color:#EF4444;box-shadow:0 0 0 2px #FECACA inset}
-.kbd{font:11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#F3F4F6;border:1px solid #E5E7EB;border-bottom-width:2px;border-radius:6px;padding:2px 4px}
 .progress{font-size:12px;color:#374151}
+@media print{
+  .pagebreak{page-break-after:always}
+  figure,.ph{page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to content</a>
-<div class="wrap">
+<div class="wrap" id="pdf-root">
   <header class="header">
     <div>
       <h1 class="h-title" id="pageTitle">Owner Inspection — Year / Month</h1>
       <div class="h-sub small" id="summaryDate" aria-live="polite">Loading…</div>
       <div id="progress" class="progress" aria-live="polite"></div>
     </div>
-    <form class="controls" id="filters" onsubmit="return false;">
+    <form class="controls" onsubmit="return false;">
       <div>
         <label id="labelYear" for="year">Year</label><br/>
         <select id="year" title="Year" aria-labelledby="labelYear" autocomplete="off"></select>
@@ -88,11 +84,11 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
         <label for="inspection" class="hidden" id="inspectionLabel">Inspection</label><br/>
         <select id="inspection" title="Inspection" class="hidden" aria-labelledby="inspectionLabel" autocomplete="off"></select>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="lastBtn" type="button" title="Jump to most recent inspection" aria-keyshortcuts="L">Last</button>
-        <button id="genAllBtn" type="button" title="Generate PDFs for all months to Google Drive">Generate All PDFs → Drive</button>
+        <button id="genAllPixelBtn" type="button" title="Generate identical PDFs (client) → Drive">Generate Pixel-Perfect PDFs → Drive</button>
       </div>
-      <p class="small" style="margin:0">Keyboard: <span class="kbd">L</span> = Last</p>
+      <p class="small" style="margin:0">Tip: Photos on Google Drive are converted to CORS-friendly URLs for capture.</p>
     </form>
   </header>
 
@@ -116,24 +112,21 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
   </main>
 </div>
 
-<script type="module">
-/** ====== CONFIG ====== **/
+<script>
+/* ===== Config ===== */
 const TZ = 'America/Costa_Rica';
 const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv';
-// === Google Drive integration ===
-// Replace this with your deployed Apps Script Web App URL (ends with /exec)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec';
-// Folder ID from your link: https://drive.google.com/drive/folders/<ID>
 const DRIVE_FOLDER_ID = '1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV';
 
-/** ====== STATE ====== **/
+/* ===== State ===== */
 let RAW_ROWS = [];
 let YEARS = [];
 let MONTHS_BY_YEAR = {};
 let LATEST_YM = {year:undefined, month:undefined};
 let CURRENT_FILTER = { y: undefined, m: undefined, idx: 'all' };
 
-/** ====== Heuristics ====== **/
+/* ===== Heuristics ===== */
 const TS_KEYS=['Timestamp','timestamp','Marca temporal','marca temporal','Fecha','fecha','Fecha y hora','fecha y hora','Date','Datetime','date','datetime'];
 const META_HINTS=['email','correo','name','nombre','inspector','by who','por quién','submitted','enviado'];
 const PHOTO_HINTS=['photo','photos','foto','fotos','imagen','imágenes','imagenes','image','images','picture','pictures','pic','screenshot','url','link'];
@@ -141,7 +134,7 @@ const COMMENT_HINTS=['if you answered','si respondió','si respondiste','describ
 const ADDRESS_HINTS=['address','direccion','dirección','property','propiedad','unit','apt','suite','street','calle','listing'];
 const FRIENDLY={BR:'Bedroom',BD:'Bedroom',BA:'Bathroom',KT:'Kitchen',KI:'Kitchen',LR:'Living Room',LV:'Living Room',GQ:'General',LL:'Locks & Lights',LA:'Laundry',DR:'Dining Room',EX:'Exterior',ALL:'All Checks'};
 
-/** ====== Utils ====== **/
+/* ===== Utils ===== */
 const $=id=>document.getElementById(id);
 const setError=msg=>{$('errBox').textContent=msg||'';};
 const lower=s=>String(s||'').toLowerCase();
@@ -155,12 +148,11 @@ function firstVal(row,keys){if(!row||typeof row!=='object')return;for(const k of
 function isMetaHeader(h){const l=lower(h||'');return TS_KEYS.some(k=>l===lower(k))||META_HINTS.some(hint=>l.includes(hint));}
 function isPhotoHeader(h){const s=String(h||'');const l=s.toLowerCase();const dl=stripDiacritics(s).toLowerCase();return PHOTO_HINTS.some(hint=>l.includes(hint)||dl.includes(hint));}
 function isCommentOnlyHeader(h){return COMMENT_HINTS.some(hint=>lower(h||'').includes(hint));}
-function sectionKeyFromHeader(h){if(!h)return null;const m=String(h).match(/\[([A-Za-z0-9_]+)\]/);if(!m)return null;return m[1].replace(/_.*/,'');}
+function sectionKeyFromHeader(h){if(!h) return null; const m=String(h).match(/\[([A-Za-z0-9_]+)\]/); if(!m) return null; return m[1].replace(/_.*/,'');}
 function sanitizeCsvText(text){if(text&&text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
-function toDrivePreview(u){ try{ if(!u.includes('drive.google.com')) return null; const m=u.match(/\/file\/d\/([^/]+)\//); let id=m?m[1]:null; if(!id){ const url=new URL(u); id=url.searchParams.get('id'); } return id?('https://drive.google.com/file/d/'+id+'/preview'):null; }catch{return null;} }
 
-/** ====== Date parsing ====== **/
+/* ===== Date parsing ===== */
 function parseTimestamp(row){
   const t=firstVal(row,TS_KEYS);
   if(t==null||t==='')return null;
@@ -171,43 +163,49 @@ function parseTimestamp(row){
 }
 function deriveYM(row){const d=parseTimestamp(row);return d?{year:d.getFullYear(),month:d.getMonth()+1}:{year:undefined,month:undefined};}
 
-/** ====== CSV I/O ====== **/
-function cacheKey(url){return `csvCache:${url}`;}
-async function fetchWithTimeout(url,ms=15000){
+/* ===== CSV ===== */
+async function fetchWithTimeout(url, ms=15000){
   const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);
   try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}catch(e){clearTimeout(t);throw e;}
 }
 function isAllowedCsv(url){try{const u=new URL(url);if(u.protocol!=='https:')return false;return ['docs.google.com','drive.google.com'].includes(u.hostname);}catch{return false;}}
 function normalizeCsvUrl(url){
-  try{const u=new URL(url);
+  try{
+    const u=new URL(url);
     if(u.hostname==='docs.google.com'){ if(u.pathname.includes('/spreadsheets/') && !u.searchParams.get('output')) u.searchParams.set('output','csv'); }
     if(u.hostname==='drive.google.com'){ if(!u.searchParams.get('export')) u.searchParams.set('export','download'); }
     return u.toString();
   }catch{return url;}
 }
+function getCsvUrlFromParams(){const params=new URLSearchParams(location.search);const p=(params.get('csv')||'').trim(); if(p && isAllowedCsv(p)) return normalizeCsvUrl(p); return DEFAULT_CSV;}
+
 async function loadCsv(url){
-  const key=cacheKey(url);
-  try{const cached=sessionStorage.getItem(key);if(cached){const parsed=JSON.parse(cached);if(Array.isArray(parsed))return parsed;}}catch{}
-  let res;try{res=await fetchWithTimeout(url,15000);}catch{throw new Error('Network timeout or fetch blocked fetching CSV');}
-  if(!res.ok)throw new Error(`HTTP ${res.status} fetching CSV`);
-  const raw=await res.text();const cleaned=sanitizeCsvText(raw);
-  if(!window.Papa||!window.Papa.parse){return naiveCsvParse(cleaned);} // fallback
+  let res;
+  try{res=await fetchWithTimeout(url,15000);}catch{throw new Error('Network timeout or fetch blocked fetching CSV');}
+  if(!res.ok) throw new Error(`HTTP ${res.status} fetching CSV`);
+  const raw=await res.text();
+  const cleaned=sanitizeCsvText(raw);
+  if(!window.Papa||!window.Papa.parse){return naiveCsvParse(cleaned);}
   return new Promise(resolve=>{
     try{
       Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy',
         transformHeader:h=>String(h||'').normalize('NFC'),
         transform:v=>String(v??''),
-        complete:(results)=>{const data=results.data||[];try{sessionStorage.setItem(key,JSON.stringify(data));}catch{} resolve(data);}});
+        complete:(results)=>{resolve(results.data||[]);}});
     }catch{resolve(naiveCsvParse(cleaned));}
   });
 }
 function naiveCsvParse(text){
-  const lines=text.split('\n').filter(l=>l!==''); if(!lines.length) return [];
-  const headers=lines.shift().split(',').map(h=>h.trim());
-  return lines.map(line=>{const parts=line.split(',');const o={};headers.forEach((h,i)=>o[h]=parts[i]??'');return o;});
+  const lines=text.split('\n').filter(Boolean);
+  const headers=(lines.shift()||'').split(',').map(h=>h.trim());
+  return lines.map(line=>{
+    const parts=line.split(','), o={};
+    headers.forEach((h,i)=>o[h]=parts[i]??'');
+    return o;
+  });
 }
 
-/** ====== Classification ====== **/
+/* ===== Classification & aggregation ===== */
 function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\s+/g,' ');return stripDiacritics(t);}
 function classifyAnswer(val){
   if(val==null)return'ignore';const raw=String(val).trim();if(!raw)return'ignore';if(isUrlish(raw))return'ignore';
@@ -216,11 +214,9 @@ function classifyAnswer(val){
   const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t));
   if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore';
 }
-
-/** ====== Aggregation with photo matching ====== **/
 function aggregate(rows){
   const agg={sections:{},photos:{},details:{},overall:{passes:0,fails:0,total:0,rate:0}};
-  let sawBracket=false; const headers=rows.length?Object.keys(rows[0]??{}):[]; const photoSeen=new Set();
+  let saw=false; const headers=rows.length?Object.keys(rows[0]??{}):[]; const photoSeen=new Set();
 
   function headerTokens(h){
     const cleaned=String(h||'').replace(/\[[^\]]+\]\s*/,'')
@@ -233,21 +229,19 @@ function aggregate(rows){
   const overlap=(a,b)=>{const sb=new Set(b);let n=0;for(const t of a) if(sb.has(t)) n++; return n;};
 
   function splitUrls(val){
-    let s=String(val||'').replace(/\bwww\.[^\s,;|)>\]]+/gi, m => 'https://' + m);
-    const out=[]; const re=/(https?:\/\/[^\s<>"')\],;|]+)(?=[\s<>"')\],;|]|$)/gi; let m;
+    let s=String(val||'').replace(/\bwww\.[^\s,;|)>\]]+/gi, m=>'https://'+m);
+    const out=[]; const re=/(https?:\/\/[^\s<>")\],;|]+)(?=[\s<>")\],;|]|$)/gi; let m;
     while((m=re.exec(s))){ let u=m[1].replace(/[)\],;.!?]+$/,'').replace(/^http:/i,'https:'); out.push(u); }
     return out;
   }
 
   for(const row of rows){
     const ts=parseTimestamp(row)||new Date();
-    const rowQs=[];   // {key, header, tokens, pass}
-    const rowPics=[]; // {key, header, tokens, urls[]}
-
+    const rowQs=[]; const rowPics=[];
     for(const h of headers){
       if(isMetaHeader(h)) continue;
       const val=row[h];
-      const code=sectionKeyFromHeader(h); if(code) sawBracket=true;
+      const code=sectionKeyFromHeader(h); if(code) saw=true;
       const key=code||'ALL';
 
       if(isPhotoHeader(h)){
@@ -282,7 +276,7 @@ function aggregate(rows){
     }
   }
 
-  if(!sawBracket && Object.keys(agg.photos).length){
+  if(!saw && Object.keys(agg.photos).length){
     const merged={ALL:[]}; Object.values(agg.photos).forEach(arr=>merged.ALL.push(...arr)); agg.photos=merged;
   }
 
@@ -293,7 +287,7 @@ function aggregate(rows){
   return agg;
 }
 
-/** ====== Rendering ====== **/
+/* ===== Rendering ===== */
 function donutStrokeColor(pct){ if(pct==null) return '#9CA3AF'; if(pct>=90) return '#10B981'; if(pct>=70) return '#F59E0B'; return '#EF4444'; }
 function sectionName(code){ return code==='ALL'?'All Checks':(FRIENDLY[code]?`${FRIENDLY[code]}${code==='ALL'?'':` (${code})`}`:code); }
 
@@ -312,7 +306,7 @@ function renderTiles(agg){
     const nameText=sectionName(k);
 
     const li=document.createElement('li');
-    const a=document.createElement('a'); a.className='tile'; a.href='#sec-'+slug(k); a.rel='nofollow'; a.setAttribute('aria-label',`${nameText}: ${center}`);
+    const a=document.createElement('a'); a.className='tile'; a.href='#sec-'+slug(k); a.rel='nofollow'; a.setAttribute('aria-label', `${nameText}: ${center}`);
 
     const svgNS='http://www.w3.org/2000/svg';
     const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('class','donut'); svg.setAttribute('viewBox','0 0 36 36');
@@ -328,6 +322,11 @@ function renderTiles(agg){
   }
   tiles.appendChild(frag);
 }
+
+function toDriveId(u){ try{ const m=String(u||'').match(/\/file\/d\/([^/]+)/); if(m) return m[1]; const url=new URL(u); return url.searchParams.get('id'); }catch{} return null; }
+function toDriveDirect(u){ try{ const id=toDriveId(u); if(!id) return null; return 'https://drive.usercontent.google.com/uc?id='+id+'&export=download'; }catch{ return null; } }
+function toDropboxRaw(u){ try{ const url=new URL(u); if(url.hostname.endsWith('dropbox.com')){ url.hostname='dl.dropboxusercontent.com'; url.searchParams.delete('dl'); url.searchParams.delete('raw'); return url.toString(); } }catch{} return null; }
+function enhanceUrl(u){ let s=String(u||''); if(/^www\./i.test(s)) s='https://'+s; if(/^http:\/\//i.test(s)) s=s.replace(/^http:/i,'https:'); const dd=toDriveDirect(s); if(dd) return dd; const db=toDropboxRaw(s); if(db) return db; return s; }
 
 function renderPhotos(agg){
   const wrap=$('photoSections'); wrap.replaceChildren();
@@ -345,12 +344,7 @@ function renderPhotos(agg){
     for(const {url,ts,flagged} of (agg.photos[k]||[])){
       const fig=document.createElement('figure'); fig.className='ph'+(flagged?' issue':'');
       if(flagged){ const b=document.createElement('span'); b.className='badge'; b.textContent='Issue'; fig.appendChild(b); }
-      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='lazy'; img.referrerPolicy='no-referrer'; img.decoding='async'; img.src=url;
-      img.onerror=()=>{
-        const prev=toDrivePreview(url);
-        if(prev){ const ifr=document.createElement('iframe'); ifr.loading='lazy'; ifr.referrerPolicy='no-referrer'; ifr.src=prev; ifr.title='Google Drive preview'; ifr.setAttribute('sandbox','allow-scripts allow-same-origin'); fig.appendChild(ifr); img.remove(); }
-        else{ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Open Photo'; img.replaceWith(a); }
-      };
+      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='eager'; img.crossOrigin='anonymous'; img.referrerPolicy='no-referrer'; img.decoding='async'; img.src=enhanceUrl(url);
       const cap=document.createElement('figcaption');
       const left=document.createElement('span'); left.className='cap-left'; left.textContent=title+(flagged?' — Issue':'');
       const right=document.createElement('span'); right.className='cap-right'; right.textContent=dfmt.format(ts);
@@ -380,7 +374,7 @@ function renderIssuesSummary(agg){
   wrap.appendChild(frag);
 }
 
-/** ====== Indexing, selectors, apply ====== **/
+/* ===== Index & selectors ===== */
 function deriveAddress(rows){
   if(!rows||!rows.length) return '';
   const headers=Object.keys(rows[0]||{}); let addrCol=headers.find(h=>ADDRESS_HINTS.some(hint=>lower(h).includes(hint)))||'';
@@ -416,8 +410,14 @@ function populateSelectors(){
     iSel.replaceChildren();
     if(monthRows.length<=1){ iSel.classList.add('hidden'); iLbl.classList.add('hidden'); return; }
     iSel.classList.remove('hidden'); iLbl.classList.remove('hidden');
+
     iSel.add(new Option('All inspections in month','all'));
-    monthRows.forEach((row,idx)=>{ const d=parseTimestamp(row); const dt=d?dfmt.format(d):''; const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`; iSel.add(new Option(label,String(idx)));});
+    monthRows.forEach((row,idx)=>{
+      const d=parseTimestamp(row);
+      const dt=d?dfmt.format(d):'';
+      const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`;
+      iSel.add(new Option(label,String(idx)));
+    });
     iSel.value=String(CURRENT_FILTER.idx ?? 'all');
   }
 
@@ -440,7 +440,7 @@ function applySelection(pushState=true){
   }
 
   const agg=aggregate(monthRows);
-  const label=monthRows.length?`${monthName(m)} ${y}${(!iSel.classList.contains('hidden')&&iSel.value!=='all')?' — '+iSel.options[iSel.selectedIndex].text:''}`:'No data';
+  const label=monthRows.length?`${monthName(m)} ${y}${(!iSel.classList.contains('hidden') && iSel.value!=='all') ? ' — '+iSel.options[iSel.selectedIndex].text : ''}`:'No data';
   $('summaryDate').textContent=label;
 
   renderTiles(agg);
@@ -455,99 +455,109 @@ function applySelection(pushState=true){
   }
 }
 
-/** ====== Build report payloads & upload ====== **/
-function buildMonthRows(y,m){
-  return RAW_ROWS.filter(r=>{const d=deriveYM(r);return d.year===y&&d.month===m;})
-    .sort((a,b)=>(parseTimestamp(b)?.getTime()||0)-(parseTimestamp(a)?.getTime()||0));
+/* ===== Pixel-perfect PDF generation ===== */
+function cloneForPdf(){
+  const src=document.getElementById('pdf-root');
+  const clone=src.cloneNode(true);
+  clone.id='pdf-clone';
+  clone.style.maxWidth='800px'; // fits A4 better
+  // images
+  clone.querySelectorAll('img').forEach(img=>{
+    const u=img.getAttribute('src')||'';
+    const better=enhanceUrl(u);
+    img.setAttribute('src',better);
+    img.setAttribute('crossorigin','anonymous');
+    img.setAttribute('referrerpolicy','no-referrer');
+    img.setAttribute('loading','eager');
+  });
+  // drop iframes
+  clone.querySelectorAll('iframe').forEach(el=>el.remove());
+  return clone;
 }
-
-function buildReportPayload(address,y,m){
-  const rows=buildMonthRows(y,m);
-  const agg=aggregate(rows);
-  const sections=Object.keys(agg.sections).sort();
-  const photos={};
-  for(const k of Object.keys(agg.photos)){
-    photos[k]=(agg.photos[k]||[]).map(p=>({url:p.url, flagged:!!p.flagged}));
-  }
-  return {
-    address,
-    year:y,
-    month:m,
-    monthLabel: `${monthName(m)} ${y}`,
-    overall: agg.overall,
-    sections: sections.map(k=>({ key:k, name:sectionName(k), ...agg.sections[k] })),
-    issues: Object.fromEntries(Object.entries(agg.details).map(([k,arr])=>[k,arr.filter(it=>!it.pass).map(it=>({q:it.question,a:String(it.answer)}))])),
-    photos
-  };
+async function waitForImages(el, timeoutMs=15000){
+  const imgs=[...el.querySelectorAll('img')];
+  const start=Date.now();
+  const ok=()=>imgs.every(i=>i.complete && i.naturalWidth>0);
+  if(ok()) return;
+  await new Promise(r=>{ (function tick(){ if(ok()||Date.now()-start>timeoutMs) return r(); requestAnimationFrame(tick); })(); });
 }
-
+function arrayBufferToBase64(buf){
+  let binary=''; const bytes=new Uint8Array(buf); const len=bytes.byteLength;
+  for(let i=0;i<len;i++) binary+=String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+async function renderMonthToPdfBase64(filename){
+  const node=cloneForPdf();
+  document.body.appendChild(node);
+  await waitForImages(node,18000);
+  const opt={margin:[10,10,10,10],filename,html2canvas:{useCORS:true,backgroundColor:'#ffffff',scale:2,logging:false,removeContainer:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}};
+  const pdf=await html2pdf().set(opt).from(node).toPdf().get('pdf');
+  const buf=pdf.output('arraybuffer');
+  node.remove();
+  return arrayBufferToBase64(buf);
+}
 async function postToAppsScript(payload){
-  try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
-      mode: 'cors',
-    });
-    try { return await res.json(); } catch { return { ok: true, cors: true }; }
-  } catch (e) {
-    // Fallback for GitHub Pages / CORS: fire-and-forget
-    try { await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload), mode: 'no-cors' }); } catch {}
-    return { ok: true, noCors: true };
+  try{
+    const res=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),mode:'cors'});
+    try{ return await res.json(); }catch{ return {ok:true,cors:true}; }
+  }catch(e){
+    try{ await fetch(APPS_SCRIPT_URL,{method:'POST',body:JSON.stringify(payload),mode:'no-cors'}); }catch{}
+    return {ok:true,noCors:true};
   }
 }
-
-async function generateAllReportsToDrive(){
+function buildMonthRows(y,m){return RAW_ROWS.filter(r=>{const d=deriveYM(r);return d.year===y&&d.month===m;}).sort((a,b)=>(parseTimestamp(b)?.getTime()||0)-(parseTimestamp(a)?.getTime()||0));}
+function buildReportAddress(){const a=deriveAddress(RAW_ROWS);return a||'Property';}
+async function generateAllPixelPdfsToDrive(){
   const prog=$('progress');
-  if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('PASTE_YOUR_APPS_SCRIPT')){
-    alert('Please paste your Google Apps Script Web App URL into APPS_SCRIPT_URL at the top of the file.');
-    return;
-  }
-  const address = deriveAddress(RAW_ROWS) || 'Property';
-  const years = YEARS.slice();
-  let total=0, done=0;
-  for(const y of years){ total += (MONTHS_BY_YEAR[String(y)]||[]).length; }
-
-  for(const y of years){
+  const address=buildReportAddress();
+  let total=0; YEARS.forEach(y=> total += (MONTHS_BY_YEAR[String(y)]||[]).length);
+  let done=0;
+  for(const y of YEARS){
     for(const m of (MONTHS_BY_YEAR[String(y)]||[])){
+      $('year').value=String(y); $('month').value=String(m);
+      $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
+      applySelection(false);
       const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
-      const report = buildReportPayload(address,y,m);
-      const payload = { folderId: DRIVE_FOLDER_ID, filename, report };
-      prog.textContent = `Uploading ${++done}/${total}: ${filename}…`;
+      prog.textContent = `Rendering ${++done}/${total}: ${filename}…`;
       try{
-        await postToAppsScript(payload);
+        const b64 = await renderMonthToPdfBase64(filename);
+        await postToAppsScript({folderId:DRIVE_FOLDER_ID, filename, pdfBase64:b64});
       }catch(e){
-        console.error(e);
-        setError(`Upload failed for ${filename}: ${e.message}`);
+        console.error(e); setError('PDF render failed: '+(e&&e.message||e));
       }
     }
   }
-  prog.textContent = `Finished generating ${total} PDF(s) to Drive.`;
+  prog.textContent = `Finished generating ${total} pixel-perfect PDF(s) to Drive.`;
 }
 
-/** ====== Boot ====== **/
-function getCsvUrlFromParams(){const params=new URLSearchParams(location.search);const p=(params.get('csv')||'').trim(); if(p && isAllowedCsv(p)) return normalizeCsvUrl(p); return DEFAULT_CSV;}
-
+/* ===== Boot ===== */
+function jumpToLast(){
+  if(!LATEST_YM.year||!LATEST_YM.month) return;
+  const ySel=$('year'), mSel=$('month');
+  ySel.value=String(LATEST_YM.year);
+  mSel.replaceChildren();
+  (MONTHS_BY_YEAR[String(LATEST_YM.year)]||[]).sort((a,b)=>a-b).forEach(m=>mSel.add(new Option(monthName(m),String(m))));
+  mSel.value=String(LATEST_YM.month);
+  $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
+  CURRENT_FILTER={y:LATEST_YM.year,m:LATEST_YM.month,idx:'all'};
+  applySelection();
+}
 async function loadAndRender(){
   setError(''); $('summaryDate').textContent='Loading…';
-  const params=new URLSearchParams(location.search);
-  const CSV_URL=getCsvUrlFromParams();
-
   try{
-    const url=new URL(CSV_URL); url.searchParams.set('_ts_',Date.now());
+    const url=new URL(getCsvUrlFromParams()); url.searchParams.set('_ts_',Date.now());
     RAW_ROWS=await loadCsv(url.toString());
     if(!RAW_ROWS.length){ setError('No data rows found in CSV.'); }
 
+    const params=new URLSearchParams(location.search);
     const addr=params.get('address')||params.get('addr');
     const address=(addr&&addr.trim())?addr.trim():deriveAddress(RAW_ROWS);
-    if(address){ document.title=`Owner Inspection — ${address}`; const h1=$('pageTitle'); if(h1) h1.textContent=`Owner Inspection — ${address} — Year / Month`; }
+    if(address){
+      document.title = `Owner Inspection — ${address}`;
+      const h1=$('pageTitle'); if(h1) h1.textContent = `Owner Inspection — ${address} — Year / Month`;
+    }
 
     buildIndex(RAW_ROWS);
-    const yParam=parseInt(params.get('y')||'',10), mParam=parseInt(params.get('m')||'',10), iParam=(params.get('i')||'all');
-    if(Number.isFinite(yParam)) CURRENT_FILTER.y=yParam;
-    if(Number.isFinite(mParam)) CURRENT_FILTER.m=mParam;
-    if(iParam) CURRENT_FILTER.idx=iParam;
-
     populateSelectors();
     if(YEARS.length){ applySelection(false); }
     else{
@@ -566,18 +576,10 @@ async function loadAndRender(){
   }
 }
 
-$('lastBtn').addEventListener('click',()=>{ if(!LATEST_YM.year||!LATEST_YM.month) return;
-  const ySel=$('year'), mSel=$('month');
-  ySel.value=String(LATEST_YM.year);
-  mSel.replaceChildren();
-  (MONTHS_BY_YEAR[String(LATEST_YM.year)]||[]).sort((a,b)=>a-b).forEach(m=>mSel.add(new Option(monthName(m),String(m))));
-  mSel.value=String(LATEST_YM.month);
-  $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
-  CURRENT_FILTER={y:LATEST_YM.year,m:LATEST_YM.month,idx:'all'}; applySelection();
-});
-$('genAllBtn').addEventListener('click', generateAllReportsToDrive);
-window.addEventListener('keydown',e=>{ if(e.key && e.key.toLowerCase()==='l'){ e.preventDefault(); const btn=$('lastBtn'); if(btn) btn.click(); }});
-window.addEventListener('DOMContentLoaded',loadAndRender);
+document.getElementById('lastBtn').addEventListener('click', jumpToLast);
+document.getElementById('genAllPixelBtn').addEventListener('click', generateAllPixelPdfsToDrive);
+window.addEventListener('keydown', e=>{ if(e.key && e.key.toLowerCase()==='l'){ e.preventDefault(); jumpToLast(); }});
+window.addEventListener('DOMContentLoaded', loadAndRender);
 </script>
 </body>
 </html>
