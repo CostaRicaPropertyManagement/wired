@@ -451,11 +451,23 @@ function waitForFonts(){ return document.fonts && document.fonts.ready ? documen
 async function htmlToPdfBlob(container){
   document.documentElement.classList.add('pdf-mode');
   await waitForFonts();
+
   const cloned = await toExportDomWithDataImages(container);
-  const wrapper = document.createElement('div'); wrapper.style.padding='20px'; wrapper.appendChild(cloned);
-  const opt = { margin:0.4, filename:'report.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'}, jsPDF:{unit:'in',format:'letter',orientation:'portrait'} };
-  const worker = window.html2pdf().set(opt).from(wrapper).save(false);
-  const blob = await worker.outputPdf('blob');
+  const wrapper = document.createElement('div');
+  wrapper.style.padding = '20px';
+  wrapper.appendChild(cloned);
+
+  const opt = {
+    margin: 0.4,
+    filename: 'report.pdf', // harmless here; only used by .save()
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+
+  // ⬇️ key change: no .save(); just produce a Blob
+  const blob = await window.html2pdf().set(opt).from(wrapper).outputPdf('blob');
+
   document.documentElement.classList.remove('pdf-mode');
   return blob;
 }
