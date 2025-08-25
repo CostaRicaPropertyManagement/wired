@@ -1,10 +1,9 @@
-
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Inspection — Pixel-Perfect PDF (Photos Fixed)</title>
+<title>Owner Inspection — Pixel-Perfect PDF (FIXED photos)</title>
 <meta name="referrer" content="no-referrer"/>
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
@@ -36,8 +35,8 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 .section{margin:18px 0}
 .sec-title{font-weight:900;border-left:4px solid var(--brand);padding-left:10px;margin:6px 0 10px}
 .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
-.ph{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;position:relative;min-height:160px}
-.ph img,.ph iframe{width:100%;height:160px;object-fit:cover;display:block;border:0;background:#F3F4F6}
+.ph{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;position:relative}
+.ph img,.ph iframe{width:100%;height:160px;object-fit:cover;display:block;border:0}
 .ph figcaption{font-size:11px;color:#6B7280;padding:6px 8px;display:flex;justify-content:space-between;gap:6px}
 .cap-left{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cap-right{color:#374151;white-space:nowrap}
@@ -53,7 +52,7 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="root">
   <header class="header">
     <div>
       <h1 class="h-title" id="pageTitle">Owner Inspection — Year / Month</h1>
@@ -103,10 +102,10 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 
 <script>
 // ===== CONFIG =====
+const TZ = 'America/Costa_Rica';
+const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec";
 const DRIVE_FOLDER_ID = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV";
-const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
-const TZ = 'America/Costa_Rica';
 
 // ===== STATE =====
 let RAW_ROWS = [];
@@ -138,6 +137,43 @@ function isCommentOnlyHeader(h){return COMMENT_HINTS.some(hint=>lower(h||'').inc
 function sectionKeyFromHeader(h){if(!h)return null;const m=String(h).match(/\[([A-Za-z0-9_]+)\]/);if(!m)return null;return m[1].replace(/_.*/,'');}
 function sanitizeCsvText(text){if(text&&text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+// ===== Drive/Dropbox helpers =====
+function driveIdFromUrl(u){
+  try{
+    const url = new URL(u);
+    if(url.hostname!=='drive.google.com') return null;
+    let id = null;
+    const m = url.pathname.match(/\/file\/d\/([^/]+)/);
+    if(m) id = m[1];
+    if(!id) id = url.searchParams.get('id');
+    if(!id){ // shared "uc?id="
+      const mm = url.search.match(/[?&]id=([^&]+)/);
+      if(mm) id = mm[1];
+    }
+    return id;
+  }catch{return null;}
+}
+const driveDirectImage = (id)=> `https://drive.google.com/uc?export=view&id=${id}`;
+const drivePreview = (id)=> `https://drive.google.com/file/d/${id}/preview`;
+function dropboxDirect(u){
+  try{
+    // www.dropbox.com/s/<path>?dl=0|1  -> dl.dropboxusercontent.com/s/<path>?raw=1
+    if(!/dropbox\.com/.test(u)) return null;
+    const url = new URL(u.replace('www.dropbox.com','dropbox.com'));
+    const path = url.pathname.replace(/^\/s\//,'/s/');
+    return `https://dl.dropboxusercontent.com${path}?raw=1`;
+  }catch{return null;}
+}
+function toImageUrl(u){
+  if(!u) return u;
+  try{ u = u.replace(/^http:/,'https:'); }catch{}
+  const id = driveIdFromUrl(u);
+  if(id) return driveDirectImage(id);
+  const db = dropboxDirect(u);
+  if(db) return db;
+  return u;
+}
 
 // ===== Date parsing =====
 function parseTimestamp(row){
@@ -193,56 +229,9 @@ function aggregate(rows){
   return agg;
 }
 
-// ===== Rendering helpers =====
+// ===== Rendering =====
 function donutStrokeColor(pct){ if(pct==null) return '#9CA3AF'; if(pct>=90) return '#10B981'; if(pct>=70) return '#F59E0B'; return '#EF4444'; }
 function sectionName(code){ return code==='ALL'?'All Checks':(FRIENDLY[code]?`${FRIENDLY[code]}${code==='ALL'?'':` (${code})`}`:code); }
-
-// --- NEW: robust URL normalizer for images ---
-function normalizeImageUrl(u){
-  if(!u) return '';
-  try{
-    // Trim junk chars
-    u = String(u).trim().replace(/^<|>$/g,'');
-    // Handle Google Drive share URLs
-    if(u.includes('drive.google.com')){
-      const m = u.match(/\/file\/d\/([^/]+)/);
-      let id = m ? m[1] : null;
-      if(!id){
-        const url = new URL(u);
-        id = url.searchParams.get('id');
-      }
-      if(id){
-        // direct-view endpoint that returns the image bytes
-        return `https://drive.google.com/uc?export=view&id=${id}`;
-      }
-    }
-    // Dropbox share -> direct bytes
-    if(u.includes('dropbox.com')){
-      try{
-        const url = new URL(u);
-        url.hostname = 'dl.dropboxusercontent.com';
-        if(url.searchParams.get('dl')) url.searchParams.delete('dl');
-        if(!url.searchParams.get('raw')) url.searchParams.set('raw','1');
-        return url.toString();
-      }catch{}
-    }
-    // Ensure https
-    if(/^http:\/\//i.test(u)) u = u.replace(/^http:/i,'https:');
-    return u;
-  }catch{
-    return u;
-  }
-}
-
-function toDrivePreviewIframe(u){
-  try{
-    if(!u.includes('drive.google.com')) return null;
-    const m = u.match(/\/file\/d\/([^/]+)\//);
-    let id = m ? m[1] : null;
-    if(!id){ const url = new URL(u); id = url.searchParams.get('id'); }
-    return id ? ('https://drive.google.com/file/d/'+id+'/preview') : null;
-  }catch{return null;}
-}
 
 function renderTiles(agg){
   const tiles=$('tiles'); tiles.replaceChildren();
@@ -285,26 +274,18 @@ function renderPhotos(agg){
     for(const {url,ts,flagged} of (agg.photos[k]||[])){
       const fig=document.createElement('figure'); fig.className='ph'+(flagged?' issue':'');
       if(flagged){ const b=document.createElement('span'); b.className='badge'; b.textContent='Issue'; fig.appendChild(b); }
-      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='lazy'; img.decoding='async';
-      img.referrerPolicy='no-referrer'; // avoid referrer-based blocking
-      img.crossOrigin='anonymous';
-      const norm = normalizeImageUrl(url);
-      img.src = norm;
-
-      img.onerror=()=>{
-        // If normalized URL still fails, try Drive preview iframe as last resort
-        const prev=toDrivePreviewIframe(url);
-        if(prev){
-          const ifr=document.createElement('iframe');
-          ifr.loading='lazy'; ifr.referrerPolicy='no-referrer'; ifr.src=prev; ifr.title='Google Drive preview';
-          ifr.setAttribute('allow','encrypted-media *'); // harmless, avoids some restrictions
-          fig.appendChild(ifr);
-          img.remove();
-        }else{
+      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='lazy'; img.referrerPolicy='no-referrer'; img.decoding='async';
+      let resolved = toImageUrl(url);
+      img.src = resolved;
+      img.onerror = () => {
+        const id = driveIdFromUrl(url);
+        if(id){
+          const ifr=document.createElement('iframe'); ifr.loading='lazy'; ifr.referrerPolicy='no-referrer'; ifr.src=drivePreview(id); ifr.title='Drive preview';
+          fig.appendChild(ifr); img.remove();
+        } else {
           const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Open Photo'; img.replaceWith(a);
         }
       };
-
       const cap=document.createElement('figcaption');
       const left=document.createElement('span'); left.className='cap-left'; left.textContent=title+(flagged?' — Issue':'');
       const right=document.createElement('span'); right.className='cap-right'; right.textContent=dfmt.format(ts);
@@ -327,7 +308,7 @@ function renderIssuesSummary(agg){
     const list=document.createElement('ul');
     const grouped=new Map();
     for(const item of (agg.details[k]||[])){ if(item.pass) continue; const key=`${item.question} — ${String(item.answer)}`; grouped.set(key,(grouped.get(key)||0)+1); }
-    for(const [txt,count] of grouped){ const li=document.createElement('li'); li.textContent=count>1?`${txt} (x${count})`:txt; list.appendChild(li); }
+    for(const [txt,count]of grouped){ const li=document.createElement('li'); li.textContent=count>1?`${txt} (x${count})`:txt; list.appendChild(li); }
     sec.appendChild(list); frag.appendChild(sec);
   }
   wrap.appendChild(frag);
@@ -364,13 +345,13 @@ function populateSelectors(){
   }
   function fillInspections(){
     const y=parseInt(ySel.value,10), m=parseInt(mSel.value,10);
-    const monthRows=RAW_ROWS.filter(r=>{const d=deriveYM(r); return d.year===y && d.month===m;})
+    const monthRows=RAW_ROWS.filter(r=>{const d=deriveYM(r);return d.year===y&&d.month===m;})
       .sort((a,b)=>(parseTimestamp(b)?.getTime()||0)-(parseTimestamp(a)?.getTime()||0));
     iSel.replaceChildren();
     if(monthRows.length<=1){ iSel.classList.add('hidden'); iLbl.classList.add('hidden'); return; }
     iSel.classList.remove('hidden'); iLbl.classList.remove('hidden');
     iSel.add(new Option('All inspections in month','all'));
-    monthRows.forEach((row,idx)=>{ const d=parseTimestamp(row); const dt=d?dfmt.format(d):''; const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`; iSel.add(new Option(label,String(idx))); });
+    monthRows.forEach((row,idx)=>{ const d=parseTimestamp(row); const dt=d?dfmt.format(d):''; const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`; iSel.add(new Option(label,String(idx)));});
     iSel.value='all';
   }
 
@@ -430,8 +411,7 @@ async function loadAndRender(){
   }
 }
 
-// ===== Pixel-perfect export (unchanged) =====
-function waitForFonts(){ return document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(); }
+// ===== Pixel-perfect export (unchanged except 1-line fix) =====
 async function appsFetchImageAsDataUrl(url){
   try{
     const res = await fetch(APPS_SCRIPT_URL, {
@@ -441,17 +421,16 @@ async function appsFetchImageAsDataUrl(url){
     const js = await res.json().catch(()=>null);
     if(js && js.dataUrl) return js.dataUrl;
   }catch{}
-  return url;
+  return url; // fallback (may not embed cross-origin)
 }
 async function toExportDomWithDataImages(container){
   const clone = container.cloneNode(true);
   const iframes = clone.querySelectorAll('iframe');
   for(const ifr of iframes){
     const src = ifr.getAttribute('src')||'';
-    let fileId = null;
-    try{ const m = src.match(/\/file\/d\/([^/]+)/); if(m) fileId=m[1]; }catch{}
+    let id = null; try{ const m=src.match(/\/file\/d\/([^/]+)/); if(m) id=m[1]; }catch{}
     let direct = src;
-    if(fileId) direct = 'https://drive.google.com/uc?export=download&id='+fileId;
+    if(id) direct = 'https://drive.google.com/uc?export=download&id='+id;
     const dataUrl = await appsFetchImageAsDataUrl(direct);
     const img = document.createElement('img');
     img.src = dataUrl; img.style.width='100%'; img.style.height='160px'; img.style.objectFit='cover';
@@ -467,30 +446,23 @@ async function toExportDomWithDataImages(container){
   }
   return clone;
 }
+function waitForFonts(){ return document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(); }
 async function htmlToPdfBlob(container){
   document.documentElement.classList.add('pdf-mode');
   await waitForFonts();
   const cloned = await toExportDomWithDataImages(container);
   const wrapper = document.createElement('div'); wrapper.style.padding='20px'; wrapper.appendChild(cloned);
-  const opt = {
-    margin: 0.4,
-    filename: 'report.pdf',
-    image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor:'#ffffff' },
-    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-  };
-  const worker = window.html2pdf().set(opt).from(wrapper).save(false);
+  const opt = { margin:0.4, filename:'report.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'}, jsPDF:{unit:'in',format:'letter',orientation:'portrait'} };
+
+  // ✅ FIX: remove `.save(false)` so nothing is downloaded
+  const worker = window.html2pdf().set(opt).from(wrapper);
   const blob = await worker.outputPdf('blob');
+
   document.documentElement.classList.remove('pdf-mode');
   return blob;
 }
 function blobToBase64(blob){
-  return new Promise((resolve,reject)=>{
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result).split(',')[1]); reader.onerror=reject; reader.readAsDataURL(blob); });
 }
 async function uploadPdfToDrive(filename, blob){
   const b64 = await blobToBase64(blob);
