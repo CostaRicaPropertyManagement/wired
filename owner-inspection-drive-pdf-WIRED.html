@@ -1,532 +1,439 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Inspection — Pixel-Perfect PDF (Drive Upload)</title>
-<meta name="referrer" content="no-referrer"/>
-<link rel="preconnect" href="https://docs.google.com" crossorigin>
-<link rel="preconnect" href="https://drive.google.com" crossorigin>
-<link rel="dns-prefetch" href="//docs.google.com">
-<link rel="dns-prefetch" href="//drive.google.com">
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-<style>
-:root{--bg:#fff;--ink:#111827;--muted:#6B7280;--line:#E5E7EB;--brand:#1F2937}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto}
-.wrap{max-width:1200px;margin:0 auto;padding:20px}
-.header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:10px 0;z-index:10}
-.h-title{font-weight:900;font-size:18px;color:var(--brand)}
-.h-sub{color:var(--muted);font-size:12px}
-.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
-label{font-size:12px;color:var(--muted)}
-select,button{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;background:#fff;color:#1F2937}
-button{cursor:pointer}
-button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #2563EB;outline-offset:2px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:14px;list-style:none;padding:0}
-.tile{display:flex;flex-direction:column;align-items:center;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;text-decoration:none;color:inherit}
-.tile .name{font-weight:800;margin-top:6px;text-align:center}
-.pill{font-size:11px;margin-top:6px;padding:3px 7px;border-radius:999px;border:1px solid var(--line)}
-.pill.ok{background:#ECFDF5;color:#065F46;border-color:#A7F3D0}
-.pill.bad{background:#FEF2F2;color:#991B1B;border-color:#FECACA}
-.pill.na{background:#F3F4F6;color:#374151;border-color:#E5E7EB}
-.section{margin:18px 0}
-.sec-title{font-weight:900;border-left:4px solid var(--brand);padding-left:10px;margin:6px 0 10px}
-.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
-.ph{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;position:relative}
-.ph img{width:100%;height:160px;object-fit:cover;display:block;border:0}
-.ph figcaption{font-size:11px;color:#6B7280;padding:6px 8px;display:flex;justify-content:space-between;gap:6px}
-.cap-left{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cap-right{color:#374151;white-space:nowrap}
-.small{font-size:12px;color:var(--muted)}
-.warn{color:#9B2226}
-.donut{width:72px;height:72px}
-.tile svg text{font-size:6px;font-weight:800;fill:#111827}
-.hidden{display:none}
-.badge{position:absolute;top:6px;left:6px;padding:2px 6px;font-size:10px;font-weight:700;border-radius:999px;background:#B91C1C;color:#fff}
-.ph.issue{border-color:#EF4444;box-shadow:0 0 0 2px #FECACA inset}
-.progress{font-size:12px;color:#374151}
-.pdf-mode .header .controls{display:none}
-</style>
-</head>
-<body>
-<div class="wrap" id="root">
-  <header class="header">
-    <div>
-      <h1 class="h-title" id="pageTitle">Owner Inspection — Year / Month</h1>
-      <div class="h-sub small" id="summaryDate" aria-live="polite">Loading…</div>
-      <div id="progress" class="progress" aria-live="polite"></div>
-    </div>
-    <div class="controls">
-      <div>
-        <label for="year">Year</label><br/>
-        <select id="year" title="Year"></select>
-      </div>
-      <div>
-        <label for="month">Month</label><br/>
-        <select id="month" title="Month"></select>
-      </div>
-      <div>
-        <label for="inspection" class="hidden" id="inspectionLabel">Inspection</label><br/>
-        <select id="inspection" title="Inspection" class="hidden"></select>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button id="lastBtn" type="button">Last</button>
-        <button id="exportMonthBtn" type="button">Export this month → Drive (Pixel)</button>
-        <button id="exportAllBtn" type="button">Export ALL months → Drive (Pixel)</button>
-      </div>
-    </div>
-  </header>
-
-  <main id="main">
-    <p id="errBox" class="small warn" role="alert" aria-live="assertive" style="margin:8px 0;"></p>
-
-    <section aria-labelledby="secStatusHeading">
-      <h2 id="secStatusHeading" class="sec-title">Section status</h2>
-      <ul id="tiles" class="tiles" aria-live="polite"></ul>
-    </section>
-
-    <section class="section" aria-labelledby="photosHeading">
-      <h2 id="photosHeading" class="sec-title">Photos (Selected)</h2>
-      <div id="photoSections"></div>
-    </section>
-
-    <section class="section" aria-labelledby="issuesHeading">
-      <h2 id="issuesHeading" class="sec-title">Issues Summary</h2>
-      <div id="issuesSummary" class="issues small">Loading…</div>
-    </section>
-  </main>
-</div>
-
-<script>
-// ===== CONFIG =====
-const TZ = 'America/Costa_Rica';
-const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec";
+/**************
+ * CONFIG
+ **************/
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
 const DRIVE_FOLDER_ID = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV";
+const TZ = "America/Costa_Rica";
 
-// ===== STATE =====
-let RAW_ROWS = [];
-let YEARS = [];
-let MONTHS_BY_YEAR = {};
-let LATEST_YM = {year:undefined, month:undefined};
-
-// ===== HINTS =====
-const TS_KEYS=['Timestamp','timestamp','Marca temporal','marca temporal','Fecha','fecha','Fecha y hora','fecha y hora','Date','Datetime','date','datetime'];
-const META_HINTS=['email','correo','name','nombre','inspector','by who','por quién','submitted','enviado'];
-const PHOTO_HINTS=['photo','photos','foto','fotos','imagen','imágenes','imagenes','image','images','picture','pictures','pic','screenshot','url','link'];
-const COMMENT_HINTS=['if you answered','si respondió','si respondiste','describe','describa','coment','comment','nota','notes','observación','observaciones','por favor','explain','explique'];
-const ADDRESS_HINTS=['address','direccion','dirección','property','propiedad','unit','apt','suite','street','calle','listing'];
-const FRIENDLY={BR:'Bedroom',BD:'Bedroom',BA:'Bathroom',KT:'Kitchen',KI:'Kitchen',LR:'Living Room',LV:'Living Room',GQ:'General',LL:'Locks & Lights',LA:'Laundry',DR:'Dining Room',EX:'Exterior',ALL:'All Checks'};
-
-// ===== Utils =====
-const $=id=>document.getElementById(id);
-const setError=msg=>{$('errBox').textContent=msg||'';};
-const lower=s=>String(s||'').toLowerCase();
-const strip=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-const dfmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',timeZone:TZ});
-const mfmt=new Intl.DateTimeFormat(undefined,{month:'long'});
-function monthName(m){return mfmt.format(new Date(2000,m-1,1));}
-function firstVal(row,keys){if(!row||typeof row!=='object')return;for(const k of keys){if(Object.hasOwn(row,k)){const v=row[k];if(v!=null&&String(v).trim()!=='')return v;}}}
-function isMetaHeader(h){const l=lower(h||'');return TS_KEYS.some(k=>l===lower(k))||META_HINTS.some(hint=>l.includes(hint));}
-function isPhotoHeader(h){const s=String(h||'');const l=s.toLowerCase();const dl=strip(s).toLowerCase();return PHOTO_HINTS.some(hint=>l.includes(hint)||dl.includes(hint));}
-function isCommentOnlyHeader(h){return COMMENT_HINTS.some(hint=>lower(h||'').includes(hint));}
-function sectionKeyFromHeader(h){if(!h)return null;const m=String(h).match(/\[([A-Za-z0-9_]+)\]/);if(!m)return null;return m[1].replace(/_.*/,'');}
-function sanitizeCsvText(text){if(text&&text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');}
-function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
-
-// ===== Drive/Dropbox helpers =====
-function driveIdFromUrl(u){
-  try{
-    const url = new URL(u);
-    if(url.hostname!=='drive.google.com') return null;
-    let id = null;
-    const m = url.pathname.match(/\/file\/d\/([^/]+)/);
-    if(m) id = m[1];
-    if(!id) id = url.searchParams.get('id');
-    if(!id){ const mm = url.search.match(/[?&]id=([^&]+)/); if(mm) id = mm[1]; }
-    return id;
-  }catch{return null;}
-}
-const driveDirectImage = (id)=> `https://drive.google.com/uc?export=view&id=${id}`;
-function dropboxDirect(u){
-  try{
-    if(!/dropbox\.com/.test(u)) return null;
-    const url = new URL(u.replace('www.dropbox.com','dropbox.com'));
-    const path = url.pathname.replace(/^\/s\//,'/s/');
-    return `https://dl.dropboxusercontent.com${path}?raw=1`;
-  }catch{return null;}
-}
-function toImageUrl(u){
-  if(!u) return u;
-  try{ u = u.replace(/^http:/,'https:'); }catch{}
-  const id = driveIdFromUrl(u);
-  if(id) return driveDirectImage(id);
-  const db = dropboxDirect(u);
-  if(db) return db;
-  return u;
+/**************
+ * PUBLIC ENTRY POINTS YOU CAN RUN
+ **************/
+// Run this to export the latest month only.
+function run_generateLatestMonth() {
+  const data = loadCsvAsObjects(CSV_URL);
+  const idx = buildIndex(data);
+  if (!idx.latest.year) throw new Error("No dated rows in CSV.");
+  const out = generateMonthPdfAndSave(
+    data,
+    DRIVE_FOLDER_ID,
+    idx.latest.year,
+    idx.latest.month
+  );
+  Logger.log(out);
 }
 
-// ===== Date parsing =====
-function parseTimestamp(row){
-  const t=firstVal(row,TS_KEYS); if(t==null||t==='')return null;
-  if(/^\d{4}-\d{2}-\d{2}/.test(t)){const d=new Date(t);return Number.isFinite(+d)?d:null;}
-  const m=String(t).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if(m){let a=+m[1],b=+m[2],y=+m[3];if(y<100)y+=2000;const month=a>12?b:a;const day=a>12?a:b;const hh=+(m[4]||'0'),mm=+(m[5]||'0'),ss=+(m[6]||'0');const d=new Date(y,month-1,day,hh,mm,ss);return Number.isFinite(+d)?d:null;}
-  const d=new Date(t);return Number.isFinite(+d)?d:null;
-}
-function deriveYM(row){const d=parseTimestamp(row);return d?{year:d.getFullYear(),month:d.getMonth()+1}:{year:undefined,month:undefined};}
-
-// ===== CSV =====
-async function fetchWithTimeout(url,ms=15000){const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}catch(e){clearTimeout(t);throw e;}}
-async function loadCsv(url){let res;try{res=await fetchWithTimeout(url,15000);}catch(e){throw new Error('Network timeout or fetch blocked fetching CSV');} if(!res.ok)throw new Error(`HTTP ${res.status} fetching CSV`); const raw=await res.text(); const cleaned=sanitizeCsvText(raw); return new Promise(resolve=>{ if(!window.Papa||!window.Papa.parse){resolve([]);return;} try{ Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy', transformHeader:h=>String(h||'').normalize('NFC'), transform:v=>String(v??''), complete:(results)=>resolve(results.data||[]) }); }catch{ resolve([]); } });}
-
-// ===== Classification + Aggregation =====
-function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\s+/g,' ');return strip(t);}
-function classifyAnswer(val){ if(val==null)return'ignore'; const raw=String(val).trim(); if(!raw)return'ignore'; if(/\bhttps?:\/\//i.test(raw))return'ignore'; const tokens=normalizeToken(raw).replace(/[^a-z]+/g,' ').trim().split(/\s+/); const yes=new Set(['yes','si','y','affirmative','true']); const no=new Set(['no','n','negative','false']); const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t)); if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore'; }
-function aggregate(rows){
-  const agg={sections:{},photos:{},details:{},overall:{passes:0,fails:0,total:0,rate:0}};
-  let sawBracket=false; const headers=rows.length?Object.keys(rows[0]??{}):[]; const photoSeen=new Set();
-  function headerTokens(h){ const cleaned=String(h||'').replace(/\[[^\]]+\]\s*/,'').replace(/\b(photos?|fotos?|imagen(?:es)?|image|images|picture|pictures|pic|screenshot|url|link)\b/gi,'').replace(/[:\-–—()]/g,' '); return normalizeToken(cleaned).split(/\s+/).filter(Boolean); }
-  const tokenCache=new Map(); const tok=h=>{ if(!tokenCache.has(h)) tokenCache.set(h,headerTokens(h)); return tokenCache.get(h); };
-  const overlap=(a,b)=>{ const sb=new Set(b); let n=0; for(const t of a) if(sb.has(t)) n++; return n; };
-  function splitUrls(val){ let s=String(val||'').replace(/\bwww\.[^\s,;|)\]>]+/gi,m=>'https://'+m); const out=[]; const re=/(https?:\/\/[^\s<>"\)\],;|]+)(?=[\s<>"\)\],;|]|$)/gi; let m; while((m=re.exec(s))){ let u=m[1].replace(/[\)\],;.!?]+$/,'').replace(/^http:/i,'https:'); out.push(u);} return out; }
-  for(const row of rows){
-    const ts=parseTimestamp(row)||new Date();
-    const rowQs=[]; const rowPics=[];
-    for(const h of headers){
-      if(isMetaHeader(h)) continue;
-      const val=row[h]; const code=sectionKeyFromHeader(h); if(code) sawBracket=true; const key=code||'ALL';
-      if(isPhotoHeader(h)){ const urls=splitUrls(val); if(urls.length) rowPics.push({key,header:h,tokens:tok(h),urls}); continue; }
-      if(isCommentOnlyHeader(h)) continue;
-      const cls=classifyAnswer(val); if(cls==='ignore') continue;
-      (agg.sections[key]??={passes:0,fails:0,total:0});
-      (agg.details[key]??=[]).push({question:h,answer:String(val),pass:cls==='pass',ts});
-      if(cls==='pass') agg.sections[key].passes++; else agg.sections[key].fails++; agg.sections[key].total++;
-      rowQs.push({key,header:h,tokens:tok(h),pass:cls==='pass'});
+// Run this to export ALL months it can find.
+function run_generateAllMonths() {
+  const data = loadCsvAsObjects(CSV_URL);
+  const idx = buildIndex(data);
+  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const results = [];
+  for (const y of idx.years.sort((a,b)=>a-b)) {
+    for (const m of (idx.monthsByYear[y]||[]).sort((a,b)=>a-b)) {
+      results.push(generateMonthPdfAndSave(data, folder.getId(), y, m));
     }
-    for(const p of rowPics){
-      for(const url of p.urls){
-        if(photoSeen.has(url)) continue; photoSeen.add(url);
-        let best=null,bestScore=0;
-        for(const q of rowQs){ const score=overlap(p.tokens,q.tokens)+(q.key===p.key?1:0); if(score>bestScore){bestScore=score;best=q;} }
-        const flagged=(best && !best.pass && bestScore>0);
-        (agg.photos[p.key]??=[]).push({url,ts,flagged});
+  }
+  Logger.log(results);
+}
+
+// Run this with your own y/m if needed.
+function run_generateSpecificMonth() {
+  const YEAR = 2024;
+  const MONTH = 8; // 1-12
+  const data = loadCsvAsObjects(CSV_URL);
+  const out = generateMonthPdfAndSave(data, DRIVE_FOLDER_ID, YEAR, MONTH);
+  Logger.log(out);
+}
+
+/**************
+ * CORE
+ **************/
+function generateMonthPdfAndSave(rows, folderId, year, month) {
+  const monthRows = rows
+    .filter(r => {
+      const ym = deriveYM(r);
+      return ym.year === year && ym.month === month;
+    })
+    .sort((a,b) => (+parseTimestamp(b) || 0) - (+parseTimestamp(a) || 0));
+
+  if (!monthRows.length) {
+    throw new Error(`No rows for ${year}-${String(month).padStart(2,"0")}`);
+  }
+
+  const address = deriveAddress(rows) || "Property";
+  const agg = aggregate(monthRows); // sections, photos, details, overall
+
+  // Prepare view model for template (no client JS needed)
+  const tiles = Object
+    .keys(agg.sections)
+    .sort((a,b) => {
+      const A = agg.sections[a], B = agg.sections[b];
+      if (B.fails !== A.fails) return B.fails - A.fails;
+      return a.localeCompare(b);
+    })
+    .map(code => {
+      const s = agg.sections[code];
+      const pct = s.total ? Math.round((s.passes / s.total) * 100) : null;
+      return {
+        code,
+        name: sectionName(code),
+        passes: s.passes,
+        fails: s.fails,
+        total: s.total,
+        pct
+      };
+    });
+
+  const photoSections = Object
+    .keys(agg.photos)
+    .sort()
+    .map(code => ({
+      code,
+      name: sectionName(code),
+      items: (agg.photos[code] || [])
+        .map(p => ({
+          flagged: !!p.flagged,
+          ts: p.ts,
+          // Embed as data URL (critical so PDF has images)
+          dataUrl: imageUrlToDataUrl(p.url)
+        }))
+    }));
+
+  const issues = [];
+  Object.keys(agg.details).forEach(code => {
+    const bad = (agg.details[code] || []).filter(x => !x.pass);
+    if (bad.length) {
+      // group same text
+      const map = {};
+      bad.forEach(it => {
+        const key = `${it.question} — ${String(it.answer)}`;
+        map[key] = (map[key] || 0) + 1;
+      });
+      const items = Object.keys(map).map(k => ({ text: k, count: map[k] }));
+      issues.push({ code, name: sectionName(code), items });
+    }
+  });
+  issues.sort((a,b)=>a.name.localeCompare(b.name));
+
+  const vm = {
+    title: `Owner Inspection — ${address}`,
+    headerLine: `${monthName(month)} ${year}`,
+    address,
+    year, month,
+    tiles,
+    photoSections,
+    issues,
+    overallPct: agg.overall.total ? Math.round(agg.overall.passes / agg.overall.total * 100) : null,
+    tz: TZ
+  };
+
+  const html = renderTemplate_("Pdf", vm); // from Pdf.html file
+  const pdfBlob = HtmlService.createHtmlOutput(html)
+    .getAs(MimeType.PDF)
+    .setName(`${address} — ${year}-${String(month).padStart(2,"0")}.pdf`);
+
+  const file = DriveApp.getFolderById(folderId).createFile(pdfBlob);
+  return {
+    ok: true,
+    fileId: file.getId(),
+    name: file.getName(),
+    link: "https://drive.google.com/file/d/" + file.getId() + "/view"
+  };
+}
+
+/**************
+ * TEMPLATE RENDER
+ **************/
+function renderTemplate_(fileName, data) {
+  const t = HtmlService.createTemplateFromFile(fileName);
+  Object.keys(data).forEach(k => t[k] = data[k]);
+  // evaluate() runs no client JS here; we build static HTML with inline SVG & data URLs
+  return t.evaluate().getContent();
+}
+
+/**************
+ * CSV / DATA HELPERS
+ **************/
+const TS_KEYS = ['Timestamp','timestamp','Marca temporal','marca temporal','Fecha','fecha','Fecha y hora','fecha y hora','Date','Datetime','date','datetime'];
+const META_HINTS = ['email','correo','name','nombre','inspector','by who','por quién','submitted','enviado'];
+const PHOTO_HINTS = ['photo','photos','foto','fotos','imagen','imágenes','imagenes','image','images','picture','pictures','pic','screenshot','url','link'];
+const COMMENT_HINTS = ['if you answered','si respondió','si respondiste','describe','describa','coment','comment','nota','notes','observación','observaciones','por favor','explain','explique'];
+const ADDRESS_HINTS = ['address','direccion','dirección','property','propiedad','unit','apt','suite','street','calle','listing'];
+const FRIENDLY = {BR:'Bedroom',BD:'Bedroom',BA:'Bathroom',KT:'Kitchen',KI:'Kitchen',LR:'Living Room',LV:'Living Room',GQ:'General',LL:'Locks & Lights',LA:'Laundry',DR:'Dining Room',EX:'Exterior',ALL:'All Checks'};
+
+function loadCsvAsObjects(url) {
+  const res = UrlFetchApp.fetch(url, { followRedirects: true, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    throw new Error("HTTP " + res.getResponseCode() + " fetching CSV");
+  }
+  const text = sanitizeCsvText(res.getContentText() || "");
+  const rows = Utilities.parseCsv(text);
+  if (!rows.length) return [];
+  const headers = rows[0].map(h => (h || "").toString());
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = {};
+    const a = rows[i];
+    headers.forEach((h, idx) => r[h] = (a[idx] == null ? "" : String(a[idx])));
+    out.push(r);
+  }
+  return out;
+}
+function sanitizeCsvText(text) {
+  if (text && text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function parseTimestamp(row) {
+  const t = firstVal(row, TS_KEYS);
+  if (t == null || t === "") return null;
+  // Try standard parse first
+  const d1 = new Date(t);
+  if (isFinite(+d1)) return d1;
+  // Try dd/mm/yyyy or mm/dd/yyyy with time
+  const m = String(t).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (m) {
+    let a=+m[1], b=+m[2], y=+m[3]; if (y<100) y+=2000;
+    const month = a>12 ? b : a;
+    const day = a>12 ? a : b;
+    const hh = +(m[4]||"0"), mm=+(m[5]||"0"), ss=+(m[6]||"0");
+    const d = new Date(y, month-1, day, hh, mm, ss);
+    if (isFinite(+d)) return d;
+  }
+  return null;
+}
+function deriveYM(row) {
+  const d = parseTimestamp(row);
+  return d ? { year: d.getFullYear(), month: d.getMonth()+1 } : { year: undefined, month: undefined };
+}
+function buildIndex(rows) {
+  const years = new Set();
+  const monthsByYear = {};
+  let latestTs = 0, latest = { year: undefined, month: undefined };
+  rows.forEach(r => {
+    const d = parseTimestamp(r);
+    if (!d) return;
+    const y = d.getFullYear(), m = d.getMonth()+1;
+    years.add(y);
+    (monthsByYear[y] = monthsByYear[y] || new Set()).add(m);
+    if (+d > latestTs) { latestTs = +d; latest = { year: y, month: m }; }
+  });
+  const outMonths = {};
+  Object.keys(monthsByYear).forEach(y => outMonths[y] = Array.from(monthsByYear[y]));
+  return { years: Array.from(years), monthsByYear: outMonths, latest };
+}
+
+function firstVal(row, keys) {
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, k)) {
+      const v = row[k];
+      if (v != null && String(v).trim() !== "") return v;
+    }
+  }
+}
+
+function isMetaHeader(h) {
+  const l = (h||"").toLowerCase();
+  return TS_KEYS.some(k => l === k.toLowerCase()) || META_HINTS.some(hint => l.indexOf(hint) >= 0);
+}
+function isPhotoHeader(h) {
+  const s = (h||""); const l = s.toLowerCase();
+  const dl = stripAccents(s).toLowerCase();
+  return PHOTO_HINTS.some(hint => l.indexOf(hint) >= 0 || dl.indexOf(hint) >= 0);
+}
+function isCommentOnlyHeader(h) {
+  const l = (h||"").toLowerCase();
+  return COMMENT_HINTS.some(hint => l.indexOf(hint) >= 0);
+}
+function sectionKeyFromHeader(h) {
+  if (!h) return null;
+  const m = String(h).match(/\[([A-Za-z0-9_]+)\]/);
+  if (!m) return null;
+  return m[1].replace(/_.*/, "");
+}
+function sectionName(code) {
+  if (code === "ALL") return "All Checks";
+  return FRIENDLY[code] ? `${FRIENDLY[code]}${code === "ALL" ? "" : ` (${code})`}` : code;
+}
+function stripAccents(s) {
+  return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function headerTokens(h) {
+  const cleaned = String(h||"")
+    .replace(/\[[^\]]+\]\s*/,"")
+    .replace(/\b(photos?|fotos?|imagen(?:es)?|image|images|picture|pictures|pic|screenshot|url|link)\b/gi,"")
+    .replace(/[:\-–—()]/g," ");
+  return stripAccents(cleaned).toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(/\s+/).filter(Boolean);
+}
+function classifyAnswer(val) {
+  if (val == null) return "ignore";
+  const raw = String(val).trim();
+  if (!raw) return "ignore";
+  if (/\bhttps?:\/\//i.test(raw)) return "ignore"; // URL cells are not answers
+  const tokens = stripAccents(raw).toLowerCase().replace(/[^a-z]+/g," ").trim().split(/\s+/);
+  const yes = new Set(["yes","si","y","affirmative","true"]);
+  const no  = new Set(["no","n","negative","false"]);
+  const hasYes = tokens.some(t => yes.has(t));
+  const hasNo  = tokens.some(t => no.has(t));
+  if (hasYes && !hasNo) return "pass";
+  if (hasNo && !hasYes) return "fail";
+  return "ignore";
+}
+function splitUrls(val) {
+  let s = String(val||"").replace(/\bwww\.[^\s,;|)\]>]+/gi, m => "https://" + m);
+  const out = [];
+  const re = /(https?:\/\/[^\s<>"\)\],;|]+)(?=[\s<>"\)\],;|]|$)/gi;
+  let m;
+  while ((m = re.exec(s))) {
+    let u = m[1].replace(/[\)\],;.!?]+$/,"").replace(/^http:/i,"https:");
+    out.push(u);
+  }
+  return out;
+}
+function aggregate(rows) {
+  const agg = { sections:{}, photos:{}, details:{}, overall:{passes:0,fails:0,total:0,rate:0} };
+  const headers = rows.length ? Object.keys(rows[0]||{}) : [];
+  const photoSeen = new Set();
+  let sawBracket = false;
+
+  const tokenCache = {};
+  const tok = h => tokenCache[h] || (tokenCache[h] = headerTokens(h));
+  const overlap = (a,b) => {
+    const sb = new Set(b); let n=0; a.forEach(t=>{ if (sb.has(t)) n++; }); return n;
+  };
+
+  for (const row of rows) {
+    const ts = parseTimestamp(row) || new Date();
+    const rowQs = [];
+    const rowPics = [];
+
+    for (const h of headers) {
+      if (isMetaHeader(h)) continue;
+      const val = row[h];
+      const code = sectionKeyFromHeader(h) || "ALL";
+      if (sectionKeyFromHeader(h)) sawBracket = true;
+
+      if (isPhotoHeader(h)) {
+        const urls = splitUrls(val);
+        if (urls.length) rowPics.push({ key: code, header: h, tokens: tok(h), urls });
+        continue;
+      }
+      if (isCommentOnlyHeader(h)) continue;
+
+      const cls = classifyAnswer(val);
+      if (cls === "ignore") continue;
+
+      (agg.sections[code] || (agg.sections[code] = {passes:0,fails:0,total:0}));
+      (agg.details[code]  || (agg.details[code]  = []));
+      agg.details[code].push({ question:h, answer:String(val), pass:(cls==='pass'), ts:ts });
+      if (cls === "pass") agg.sections[code].passes++; else agg.sections[code].fails++; agg.sections[code].total++;
+      rowQs.push({ key:code, header:h, tokens:tok(h), pass:(cls==='pass') });
+    }
+
+    for (const p of rowPics) {
+      for (const url of p.urls) {
+        if (photoSeen.has(url)) continue; photoSeen.add(url);
+        // best match a question to flag issue
+        let best = null, bestScore = 0;
+        for (const q of rowQs) {
+          const score = overlap(p.tokens, q.tokens) + (q.key === p.key ? 1 : 0);
+          if (score > bestScore) { bestScore = score; best = q; }
+        }
+        const flagged = (best && !best.pass && bestScore > 0);
+        (agg.photos[p.key] || (agg.photos[p.key] = [])).push({ url, ts, flagged });
       }
     }
   }
-  if(!sawBracket && Object.keys(agg.photos).length){ const merged={ALL:[]}; Object.values(agg.photos).forEach(arr=>merged.ALL.push(...arr)); agg.photos=merged; }
-  for(const s of Object.values(agg.sections)){ agg.overall.passes+=s.passes; agg.overall.fails+=s.fails; agg.overall.total+=s.total; }
-  agg.overall.rate=agg.overall.total?(agg.overall.passes/agg.overall.total*100):0;
+
+  if (!sawBracket && Object.keys(agg.photos).length) {
+    const merged = { ALL: [] };
+    Object.values(agg.photos).forEach(arr => merged.ALL.push(...arr));
+    agg.photos = merged;
+  }
+
+  for (const s of Object.values(agg.sections)) {
+    agg.overall.passes += s.passes;
+    agg.overall.fails  += s.fails;
+    agg.overall.total  += s.total;
+  }
+  agg.overall.rate = agg.overall.total ? (agg.overall.passes / agg.overall.total * 100) : 0;
   return agg;
 }
 
-// ===== Rendering =====
-function donutStrokeColor(pct){ if(pct==null) return '#9CA3AF'; if(pct>=90) return '#10B981'; if(pct>=70) return '#F59E0B'; return '#EF4444'; }
-function sectionName(code){ return code==='ALL'?'All Checks':(FRIENDLY[code]?`${FRIENDLY[code]}${code==='ALL'?'':` (${code})`}`:code); }
-
-function renderTiles(agg){
-  const tiles=$('tiles'); tiles.replaceChildren();
-  const keys=Object.keys(agg.sections).sort((a,b)=>{const A=agg.sections[a],B=agg.sections[b]; if(B.fails!==A.fails) return B.fails-A.fails; return a.localeCompare(b);});
-  if(!keys.length){ tiles.innerHTML='<li class="small">No questions to score. Check your CSV columns.</li>'; return; }
-  const frag=document.createDocumentFragment();
-  for(const k of keys){
-    const s=agg.sections[k];
-    const rate=s.total?Math.round((s.passes/s.total)*100):null;
-    const pct=rate==null?0:clamp(rate,0,100);
-    const dash=`${pct},${100-pct}`;
-    const center=rate===null?'No Data':`${pct}%`;
-    const nameText=sectionName(k);
-    const li=document.createElement('li');
-    const a=document.createElement('a'); a.className='tile'; a.href='#sec-'+slug(k); a.rel='nofollow'; a.setAttribute('aria-label',`${nameText}: ${center}`);
-    const svgNS='http://www.w3.org/2000/svg';
-    const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('class','donut'); svg.setAttribute('viewBox','0 0 36 36');
-    const titleEl=document.createElementNS(svgNS,'title'); titleEl.textContent=`${nameText} — ${center}`; svg.appendChild(titleEl);
-    const c1=document.createElementNS(svgNS,'circle'); c1.setAttribute('cx','18'); c1.setAttribute('cy','18'); c1.setAttribute('r','15.915'); c1.setAttribute('fill','none'); c1.setAttribute('stroke','#EAEFF5'); c1.setAttribute('stroke-width','3.8'); svg.appendChild(c1);
-    const c2=document.createElementNS(svgNS,'circle'); c2.setAttribute('cx','18'); c2.setAttribute('cy','18'); c2.setAttribute('r','15.915'); c2.setAttribute('fill','none'); c2.setAttribute('stroke',donutStrokeColor(pct)); c2.setAttribute('stroke-width','3.8'); c2.setAttribute('stroke-linecap','round'); c2.setAttribute('stroke-dasharray',dash); svg.appendChild(c2);
-    const t=document.createElementNS(svgNS,'text'); t.setAttribute('x','18'); t.setAttribute('y','20'); t.setAttribute('text-anchor','middle'); t.textContent=center; svg.appendChild(t);
-    const nameEl=document.createElement('div'); nameEl.className='name'; nameEl.textContent=nameText;
-    const pill=document.createElement('div'); pill.className='pill '+(s.total===0?'na':(s.fails>0?'bad':'ok')); pill.textContent=s.total===0?'No data':(s.fails>0?`${s.fails} issue${s.fails>1?'s':''}`:'Clear'); pill.title=`${s.passes}/${s.total} passed`;
-    a.append(svg,nameEl,pill); li.appendChild(a); frag.appendChild(li);
-  }
-  tiles.appendChild(frag);
-}
-
-function renderPhotos(agg){
-  const wrap=$('photoSections'); wrap.replaceChildren();
-  const keys=Object.keys(agg.photos).sort();
-  if(!keys.length){ wrap.innerHTML='<div class="small">No photos detected for this period.</div>'; return; }
-  const frag=document.createDocumentFragment();
-  for(const k of keys){
-    const id='sec-'+slug(k);
-    const sec=document.createElement('section'); sec.className='section'; sec.id=id; sec.setAttribute('aria-labelledby',id+'-title');
-    const title=sectionName(k);
-    const h=document.createElement('h3'); h.className='sec-title'; h.id=id+'-title'; h.textContent=`${title} (${(agg.photos[k]||[]).length})`;
-    const g=document.createElement('div'); g.className='gallery';
-    for(const {url,ts,flagged} of (agg.photos[k]||[])){
-      const fig=document.createElement('figure'); fig.className='ph'+(flagged?' issue':'');
-      if(flagged){ const b=document.createElement('span'); b.className='badge'; b.textContent='Issue'; fig.appendChild(b); }
-      const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='lazy'; img.referrerPolicy='no-referrer'; img.decoding='async';
-      let resolved = toImageUrl(url);
-      img.src = resolved;
-      // IMPORTANT: no Google Drive <iframe> fallback to avoid 401/403 spam
-      img.onerror = () => {
-        const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Open Photo';
-        img.replaceWith(a);
-      };
-      const cap=document.createElement('figcaption');
-      const left=document.createElement('span'); left.className='cap-left'; left.textContent=title+(flagged?' — Issue':'');
-      const right=document.createElement('span'); right.className='cap-right'; right.textContent=dfmt.format(ts);
-      cap.append(left,right); fig.append(img,cap); g.appendChild(fig);
-    }
-    sec.append(h,g); frag.appendChild(sec);
-  }
-  wrap.appendChild(frag);
-}
-
-function renderIssuesSummary(agg){
-  const wrap=$('issuesSummary'); wrap.replaceChildren();
-  const cats=Object.keys(agg.details||{}).filter(k=>(agg.details[k]||[]).some(item=>!item.pass));
-  if(!cats.length){ wrap.textContent='No issues found — all checks passed.'; return; }
-  cats.sort();
-  const frag=document.createDocumentFragment();
-  for(const k of cats){
-    const sec=document.createElement('div');
-    const title=document.createElement('h3'); title.textContent=sectionName(k); sec.appendChild(title);
-    const list=document.createElement('ul');
-    const grouped=new Map();
-    for(const item of (agg.details[k]||[])){ if(item.pass) continue; const key=`${item.question} — ${String(item.answer)}`; grouped.set(key,(grouped.get(key)||0)+1); }
-    for(const [txt,count] of grouped){ const li=document.createElement('li'); li.textContent=count>1?`${txt} (x${count})`:txt; list.appendChild(li); }
-    sec.appendChild(list); frag.appendChild(sec);
-  }
-  wrap.appendChild(frag);
-}
-
-// ===== Selectors =====
-function deriveAddress(rows){
-  if(!rows||!rows.length) return '';
-  const headers=Object.keys(rows[0]||{}); let addrCol=headers.find(h=>ADDRESS_HINTS.some(hint=>lower(h).includes(hint)))||'';
-  if(!addrCol){ addrCol=headers.find(h=>/property|propiedad/i.test(h))||''; }
-  if(addrCol){ for(const r of rows){ const v=r[addrCol]; if(v&&String(v).trim()) return String(v).trim(); } }
-  return '';
-}
-function buildIndex(rows){
-  const years=new Set(); const byYear={}; let latest={ts:0,year:undefined,month:undefined};
-  for(const r of rows){ const d=parseTimestamp(r); if(!d) continue; const y=d.getFullYear(); const m=d.getMonth()+1; years.add(y); (byYear[y]??=new Set()).add(m); const t=+d; if(t>latest.ts) latest={ts:t,year:y,month:m}; }
-  YEARS=Array.from(years).sort((a,b)=>a-b);
-  MONTHS_BY_YEAR={}; Object.entries(byYear).forEach(([y,set])=>MONTHS_BY_YEAR[y]=Array.from(set).sort((a,b)=>a-b));
-  LATEST_YM={year:latest.year,month:latest.month};
-}
-function monthLabel(m){return monthName(m);}
-
-function populateSelectors(){
-  const ySel=$('year'), mSel=$('month'), iSel=$('inspection'), iLbl=$('inspectionLabel');
-  ySel.replaceChildren(); YEARS.forEach(y=>ySel.add(new Option(String(y),String(y))));
-  if(YEARS.length) ySel.value=String(YEARS[YEARS.length-1]);
-
-  function fillMonths(y){
-    mSel.replaceChildren();
-    const months=(MONTHS_BY_YEAR[String(y)]||[]).sort((a,b)=>a-b);
-    months.forEach(m=>mSel.add(new Option(monthLabel(m),String(m))));
-    if(months.length) mSel.value=String(months[months.length-1]);
-    fillInspections();
-  }
-  function fillInspections(){
-    const y=parseInt(ySel.value,10), m=parseInt(mSel.value,10);
-    const monthRows=RAW_ROWS.filter(r=>{const d=deriveYM(r);return d.year===y&&d.month===m;})
-      .sort((a,b)=>(parseTimestamp(b)?.getTime()||0)-(parseTimestamp(a)?.getTime()||0));
-    iSel.replaceChildren();
-    if(monthRows.length<=1){ iSel.classList.add('hidden'); iLbl.classList.add('hidden'); return; }
-    iSel.classList.remove('hidden'); iLbl.classList.remove('hidden');
-    iSel.add(new Option('All inspections in month','all'));
-    monthRows.forEach((row,idx)=>{ const d=parseTimestamp(row); const dt=d?dfmt.format(d):''; const label=idx===0?`Inspection ${idx+1} (Newest) — ${dt}`:`Inspection ${idx+1} — ${dt}`; iSel.add(new Option(label,String(idx)));});
-    iSel.value='all';
-  }
-
-  fillMonths(ySel.value);
-  ySel.onchange=()=>{ fillMonths(ySel.value); applySelection(); };
-  mSel.onchange=()=>{ fillInspections(); applySelection(); };
-  iSel.onchange=()=> applySelection();
-}
-
-function applySelection(){
-  const y=parseInt($('year').value,10);
-  const m=parseInt($('month').value,10);
-  const iSel=$('inspection');
-
-  let monthRows=RAW_ROWS.filter(r=>{const d=deriveYM(r);return d.year===y&&d.month===m;})
-    .sort((a,b)=>(parseTimestamp(b)?.getTime()||0)-(parseTimestamp(a)?.getTime()||0));
-
-  if(!iSel.classList.contains('hidden') && iSel.value!=='all'){
-    const idx=parseInt(iSel.value,10); if(!Number.isNaN(idx)&&monthRows[idx]) monthRows=[monthRows[idx]];
-  }
-
-  const agg=aggregate(monthRows);
-  const label=monthRows.length?`${monthName(m)} ${y}${(!iSel.classList.contains('hidden')&&iSel.value!=='all')?' — '+iSel.options[iSel.selectedIndex].text:''}`:'No data';
-  $('summaryDate').textContent=label;
-
-  renderTiles(agg);
-  renderPhotos(agg);
-  renderIssuesSummary(agg);
-}
-
-// ===== CSV boot =====
-function getCsvUrlFromParams(){ const params=new URLSearchParams(location.search); const p=(params.get('csv')||'').trim(); return p || DEFAULT_CSV; }
-async function loadAndRender(){
-  setError(''); $('summaryDate').textContent='Loading…';
-  try{
-    const url=new URL(getCsvUrlFromParams()); url.searchParams.set('_ts_', Date.now());
-    RAW_ROWS=await loadCsv(url.toString());
-    if(!RAW_ROWS.length){ setError('No data rows found in CSV.'); }
-
-    const addrParams=new URLSearchParams(location.search);
-    const addr=addrParams.get('address')||addrParams.get('addr');
-    const address=(addr&&addr.trim())?addr.trim():deriveAddress(RAW_ROWS);
-    if(address){
-      document.title=`Owner Inspection — ${address}`;
-      const h1=$('pageTitle'); if(h1) h1.textContent=`Owner Inspection — ${address} — Year / Month`;
-    }
-
-    buildIndex(RAW_ROWS);
-    populateSelectors();
-    if (YEARS.length){ applySelection(); } else {
-      $('summaryDate').textContent = 'No dated rows';
-    }
-  }catch(err){
-    console.error(err);
-    setError(err.message||'Failed to load');
-    $('summaryDate').textContent = 'Failed to load';
-  }
-}
-
-// ===== Pixel-perfect export (Drive ONLY) =====
-async function appsFetchImageAsDataUrl(url){
-  try{
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'fetchImage', url })
-    });
-    const js = await res.json().catch(()=>null);
-    if(js && js.ok && js.dataUrl) return js.dataUrl;
-  }catch{}
-  return url; // fallback (may not embed cross-origin)
-}
-async function toExportDomWithDataImages(container){
-  const clone = container.cloneNode(true);
-  // Replace all <img> with data URLs via Apps Script
-  const imgs = clone.querySelectorAll('img');
-  for(const img of imgs){
-    const src = img.getAttribute('src') || img.getAttribute('data-src');
-    if(!src) continue;
-    const dataUrl = await appsFetchImageAsDataUrl(src);
-    img.setAttribute('src', dataUrl);
-    img.removeAttribute('loading'); img.removeAttribute('referrerPolicy'); img.removeAttribute('decoding');
-  }
-  return clone;
-}
-function waitForFonts(){ return document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(); }
-async function htmlToPdfBlob(container){
-  document.documentElement.classList.add('pdf-mode');
-  await waitForFonts();
-  const cloned = await toExportDomWithDataImages(container);
-  const wrapper = document.createElement('div'); wrapper.style.padding='20px'; wrapper.appendChild(cloned);
-  const opt = { margin:0.4, filename:'report.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'}, jsPDF:{unit:'in',format:'letter',orientation:'portrait'} };
-  const worker = window.html2pdf().set(opt).from(wrapper);
-  // DO NOT save() to browser — we only want the Blob for Drive
-  const blob = await worker.outputPdf('blob');
-  document.documentElement.classList.remove('pdf-mode');
-  return blob;
-}
-function blobToBase64(blob){
-  return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result).split(',')[1]); reader.onerror=reject; reader.readAsDataURL(blob); });
-}
-async function uploadPdfToDrive(filename, blob){
-  const b64 = await blobToBase64(blob);
-  const payload = { action:'uploadPdf', folderId: DRIVE_FOLDER_ID, filename, pdfBase64: b64 };
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(payload)
-  });
-  if(!res.ok) throw new Error(`Upload HTTP ${res.status}`);
-  const out = await res.json();
-  if(!out.ok) throw new Error(out.error || 'Upload failed');
-  return out; // {ok:true, fileId, webViewLink}
-}
-async function exportCurrentMonthToDrive(){
-  const prog=$('progress'); setError('');
-  const y = parseInt($('year').value,10);
-  const m = parseInt($('month').value,10);
-  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
-  const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
-  prog.textContent = `Building PDF — ${filename}…`;
-  const blob = await htmlToPdfBlob(document.querySelector('#main'));
-  prog.textContent = `Uploading to Drive — ${filename}…`;
-  const out = await uploadPdfToDrive(filename, blob);
-  prog.textContent = `Uploaded ✓ → ${out.webViewLink}`;
-}
-async function exportAllMonths(){
-  const prog=$('progress'); setError('');
-  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
-  let total=0; for(const y of YEARS) total += (MONTHS_BY_YEAR[String(y)]||[]).length;
-  let done=0;
-  for(const y of YEARS){
-    for(const m of (MONTHS_BY_YEAR[String(y)]||[])){
-      $('year').value=String(y);
-      $('month').replaceChildren(); (MONTHS_BY_YEAR[String(y)]||[]).forEach(mm=>$('month').add(new Option(monthName(mm), String(mm)))); $('month').value=String(m);
-      $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
-      applySelection();
-      const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
-      prog.textContent = `(${++done}/${total}) Building PDF — ${filename}…`;
-      const blob = await htmlToPdfBlob(document.querySelector('#main'));
-      prog.textContent = `(${done}/${total}) Uploading — ${filename}…`;
-      await uploadPdfToDrive(filename, blob);
+function deriveAddress(rows) {
+  if (!rows || !rows.length) return "";
+  const headers = Object.keys(rows[0]||{});
+  let addrCol = headers.find(h => ADDRESS_HINTS.some(hint => (h||"").toLowerCase().indexOf(hint) >= 0)) || "";
+  if (!addrCol) addrCol = headers.find(h => /property|propiedad/i.test(h)) || "";
+  if (addrCol) {
+    for (const r of rows) {
+      const v = r[addrCol];
+      if (v && String(v).trim()) return String(v).trim();
     }
   }
-  prog.textContent = `Done — exported ${total} PDF(s) to Drive.`;
+  return "";
 }
 
-// ===== Events & boot =====
-$('lastBtn').addEventListener('click', ()=>{
-  if(!LATEST_YM.year||!LATEST_YM.month) return;
-  const ySel=$('year'), mSel=$('month');
-  ySel.value=String(LATEST_YM.year);
-  mSel.replaceChildren(); (MONTHS_BY_YEAR[String(LATEST_YM.year)]||[]).forEach(mm=>mSel.add(new Option(monthName(mm), String(mm))));
-  mSel.value=String(LATEST_YM.month);
-  $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
-  applySelection();
-});
-$('exportMonthBtn').addEventListener('click', async ()=>{
-  try{ await exportCurrentMonthToDrive(); }catch(err){ console.error(err); setError(err.message||'Upload failed'); }
-});
-$('exportAllBtn').addEventListener('click', async ()=>{
-  try{ await exportAllMonths(); }catch(err){ console.error(err); setError(err.message||'Batch export failed'); }
-});
-
-async function boot(){
-  setError(''); $('summaryDate').textContent='Loading…';
-  try{
-    const params=new URLSearchParams(location.search);
-    const csv = (params.get('csv')||'').trim() || DEFAULT_CSV;
-    const url=new URL(csv); url.searchParams.set('_ts_', Date.now());
-    RAW_ROWS=await loadCsv(url.toString());
-    if(!RAW_ROWS.length) setError('No data rows found in CSV.');
-
-    const addrParam = params.get('address')||params.get('addr');
-    const address = (addrParam && addrParam.trim()) ? addrParam.trim() : deriveAddress(RAW_ROWS);
-    if(address){ document.title = `Owner Inspection — ${address}`; $('pageTitle').textContent = `Owner Inspection — ${address} — Year / Month`; }
-
-    buildIndex(RAW_ROWS);
-    populateSelectors();
-    if(YEARS.length){ applySelection(); } else { $('summaryDate').textContent='No dated rows'; }
-  }catch(err){
-    console.error(err); setError(err.message||'Failed to load'); $('summaryDate').textContent='Failed to load';
+/**************
+ * IMAGES → DATA URL (to embed into PDF)
+ **************/
+function driveIdFromUrl(u) {
+  try {
+    const m1 = u.match(/\/file\/d\/([^/]+)/);
+    if (m1) return m1[1];
+    const m2 = u.match(/[?&]id=([^&]+)/);
+    if (m2) return m2[1];
+  } catch(e) {}
+  return null;
+}
+function dropboxDirect(u) {
+  try {
+    if (!/dropbox\.com/i.test(u)) return null;
+    const mm = u.replace("www.dropbox.com","dropbox.com").match(/^https?:\/\/dropbox\.com\/s\/([^?]+)(.*)$/i);
+    if (!mm) return null;
+    return "https://dl.dropboxusercontent.com/s/" + mm[1];
+  } catch(e) { return null; }
+}
+function imageUrlToDataUrl(u) {
+  if (!u) return "";
+  try {
+    u = String(u).replace(/^http:/i, "https:");
+  } catch(e) {}
+  // Drive (owned or shared) – use DriveApp to get the blob, bypassing auth prompts
+  const id = driveIdFromUrl(u);
+  if (id) {
+    try {
+      const blob = DriveApp.getFileById(id).getBlob();
+      const ct = blob.getContentType() || "image/jpeg";
+      const b64 = Utilities.base64Encode(blob.getBytes());
+      return "data:" + ct + ";base64," + b64;
+    } catch(e) {
+      // fall through to URL fetch if not accessible via DriveApp
+    }
   }
+  const db = dropboxDirect(u);
+  const url = db || u;
+  try {
+    const resp = UrlFetchApp.fetch(url, { followRedirects: true, muteHttpExceptions: true });
+    if (resp.getResponseCode() >= 200 && resp.getResponseCode() < 300) {
+      let blob = resp.getBlob();
+      // Normalize unknown types to jpeg so PDF renders fine
+      let ct = blob.getContentType() || "image/jpeg";
+      if (!/^image\//i.test(ct)) {
+        blob = blob.copyBlob().setContentType("image/jpeg");
+        ct = "image/jpeg";
+      }
+      const b64 = Utilities.base64Encode(blob.getBytes());
+      return "data:" + ct + ";base64," + b64;
+    }
+  } catch(e) {}
+  return ""; // show as empty if totally unreachable
 }
-window.addEventListener('DOMContentLoaded', boot);
-</script>
-</body>
-</html>
+
+/**************
+ * MISC
+ **************/
+function monthName(m) {
+  const date = new Date(2000, m-1, 1);
+  return Utilities.formatDate(date, TZ, "MMMM");
+}
