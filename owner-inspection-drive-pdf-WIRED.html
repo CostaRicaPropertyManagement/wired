@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Inspection — Pixel PDF → Drive</title>
+<title>Owner Inspection — Pixel-Perfect PDF (Drive Upload)</title>
 <meta name="referrer" content="no-referrer"/>
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
@@ -36,7 +36,7 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 .sec-title{font-weight:900;border-left:4px solid var(--brand);padding-left:10px;margin:6px 0 10px}
 .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
 .ph{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;position:relative}
-.ph img,.ph iframe{width:100%;height:160px;object-fit:cover;display:block;border:0}
+.ph img{width:100%;height:160px;object-fit:cover;display:block;border:0}
 .ph figcaption{font-size:11px;color:#6B7280;padding:6px 8px;display:flex;justify-content:space-between;gap:6px}
 .cap-left{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cap-right{color:#374151;white-space:nowrap}
@@ -74,8 +74,8 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="lastBtn" type="button">Last</button>
-        <button id="saveMonthBtn" type="button">Save this month → Drive (Pixel)</button>
-        <button id="saveAllBtn" type="button">Save ALL months → Drive (Pixel)</button>
+        <button id="exportMonthBtn" type="button">Export this month → Drive (Pixel)</button>
+        <button id="exportAllBtn" type="button">Export ALL months → Drive (Pixel)</button>
       </div>
     </div>
   </header>
@@ -104,7 +104,6 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 // ===== CONFIG =====
 const TZ = 'America/Costa_Rica';
 const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
-// paste YOUR /exec URL here:
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec";
 const DRIVE_FOLDER_ID = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV";
 
@@ -153,7 +152,6 @@ function driveIdFromUrl(u){
   }catch{return null;}
 }
 const driveDirectImage = (id)=> `https://drive.google.com/uc?export=view&id=${id}`;
-const drivePreview = (id)=> `https://drive.google.com/file/d/${id}/preview`;
 function dropboxDirect(u){
   try{
     if(!/dropbox\.com/.test(u)) return null;
@@ -183,23 +181,10 @@ function parseTimestamp(row){
 function deriveYM(row){const d=parseTimestamp(row);return d?{year:d.getFullYear(),month:d.getMonth()+1}:{year:undefined,month:undefined};}
 
 // ===== CSV =====
-async function fetchWithTimeout(url,ms=15000){
-  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);
-  try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}
-  catch(e){clearTimeout(t);throw e;}
-}
-async function loadCsv(url){
-  let res;try{res=await fetchWithTimeout(url,15000);}catch(e){throw new Error('Network timeout or fetch blocked fetching CSV');}
-  if(!res.ok)throw new Error(`HTTP ${res.status} fetching CSV`);
-  const raw=await res.text(); const cleaned=sanitizeCsvText(raw);
-  return new Promise(resolve=>{
-    if(!window.Papa||!window.Papa.parse){resolve([]);return;}
-    try{ Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy', transformHeader:h=>String(h||'').normalize('NFC'), transform:v=>String(v??''), complete:(results)=>resolve(results.data||[]) }); }
-    catch{ resolve([]); }
-  });
-}
+async function fetchWithTimeout(url,ms=15000){const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}catch(e){clearTimeout(t);throw e;}}
+async function loadCsv(url){let res;try{res=await fetchWithTimeout(url,15000);}catch(e){throw new Error('Network timeout or fetch blocked fetching CSV');} if(!res.ok)throw new Error(`HTTP ${res.status} fetching CSV`); const raw=await res.text(); const cleaned=sanitizeCsvText(raw); return new Promise(resolve=>{ if(!window.Papa||!window.Papa.parse){resolve([]);return;} try{ Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy', transformHeader:h=>String(h||'').normalize('NFC'), transform:v=>String(v??''), complete:(results)=>resolve(results.data||[]) }); }catch{ resolve([]); } });}
 
-// ===== Classification + Aggregation (unchanged) =====
+// ===== Classification + Aggregation =====
 function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\s+/g,' ');return strip(t);}
 function classifyAnswer(val){ if(val==null)return'ignore'; const raw=String(val).trim(); if(!raw)return'ignore'; if(/\bhttps?:\/\//i.test(raw))return'ignore'; const tokens=normalizeToken(raw).replace(/[^a-z]+/g,' ').trim().split(/\s+/); const yes=new Set(['yes','si','y','affirmative','true']); const no=new Set(['no','n','negative','false']); const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t)); if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore'; }
 function aggregate(rows){
@@ -239,9 +224,10 @@ function aggregate(rows){
   return agg;
 }
 
-// ===== Rendering (unchanged) =====
+// ===== Rendering =====
 function donutStrokeColor(pct){ if(pct==null) return '#9CA3AF'; if(pct>=90) return '#10B981'; if(pct>=70) return '#F59E0B'; return '#EF4444'; }
 function sectionName(code){ return code==='ALL'?'All Checks':(FRIENDLY[code]?`${FRIENDLY[code]}${code==='ALL'?'':` (${code})`}`:code); }
+
 function renderTiles(agg){
   const tiles=$('tiles'); tiles.replaceChildren();
   const keys=Object.keys(agg.sections).sort((a,b)=>{const A=agg.sections[a],B=agg.sections[b]; if(B.fails!==A.fails) return B.fails-A.fails; return a.localeCompare(b);});
@@ -268,6 +254,7 @@ function renderTiles(agg){
   }
   tiles.appendChild(frag);
 }
+
 function renderPhotos(agg){
   const wrap=$('photoSections'); wrap.replaceChildren();
   const keys=Object.keys(agg.photos).sort();
@@ -285,14 +272,10 @@ function renderPhotos(agg){
       const img=document.createElement('img'); img.alt=`${title} photo`; img.loading='lazy'; img.referrerPolicy='no-referrer'; img.decoding='async';
       let resolved = toImageUrl(url);
       img.src = resolved;
+      // IMPORTANT: no Google Drive <iframe> fallback to avoid 401/403 spam
       img.onerror = () => {
-        const id = driveIdFromUrl(url);
-        if(id){
-          const ifr=document.createElement('iframe'); ifr.loading='lazy'; ifr.referrerPolicy='no-referrer'; ifr.src=drivePreview(id); ifr.title='Drive preview';
-          fig.appendChild(ifr); img.remove();
-        } else {
-          const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Open Photo'; img.replaceWith(a);
-        }
+        const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.textContent='Open Photo';
+        img.replaceWith(a);
       };
       const cap=document.createElement('figcaption');
       const left=document.createElement('span'); left.className='cap-left'; left.textContent=title+(flagged?' — Issue':'');
@@ -303,6 +286,7 @@ function renderPhotos(agg){
   }
   wrap.appendChild(frag);
 }
+
 function renderIssuesSummary(agg){
   const wrap=$('issuesSummary'); wrap.replaceChildren();
   const cats=Object.keys(agg.details||{}).filter(k=>(agg.details[k]||[]).some(item=>!item.pass));
@@ -389,28 +373,50 @@ function applySelection(){
   renderIssuesSummary(agg);
 }
 
-// ===== Pixel-perfect export — FIXED (adds .toPdf()) =====
+// ===== CSV boot =====
+function getCsvUrlFromParams(){ const params=new URLSearchParams(location.search); const p=(params.get('csv')||'').trim(); return p || DEFAULT_CSV; }
+async function loadAndRender(){
+  setError(''); $('summaryDate').textContent='Loading…';
+  try{
+    const url=new URL(getCsvUrlFromParams()); url.searchParams.set('_ts_', Date.now());
+    RAW_ROWS=await loadCsv(url.toString());
+    if(!RAW_ROWS.length){ setError('No data rows found in CSV.'); }
+
+    const addrParams=new URLSearchParams(location.search);
+    const addr=addrParams.get('address')||addrParams.get('addr');
+    const address=(addr&&addr.trim())?addr.trim():deriveAddress(RAW_ROWS);
+    if(address){
+      document.title=`Owner Inspection — ${address}`;
+      const h1=$('pageTitle'); if(h1) h1.textContent=`Owner Inspection — ${address} — Year / Month`;
+    }
+
+    buildIndex(RAW_ROWS);
+    populateSelectors();
+    if (YEARS.length){ applySelection(); } else {
+      $('summaryDate').textContent = 'No dated rows';
+    }
+  }catch(err){
+    console.error(err);
+    setError(err.message||'Failed to load');
+    $('summaryDate').textContent = 'Failed to load';
+  }
+}
+
+// ===== Pixel-perfect export (Drive ONLY) =====
 async function appsFetchImageAsDataUrl(url){
   try{
-    const res = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ action:'fetchImage', url }) });
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'fetchImage', url })
+    });
     const js = await res.json().catch(()=>null);
-    if(js && js.dataUrl) return js.dataUrl;
+    if(js && js.ok && js.dataUrl) return js.dataUrl;
   }catch{}
-  return url; // fallback if cross-origin image can't be embedded
+  return url; // fallback (may not embed cross-origin)
 }
 async function toExportDomWithDataImages(container){
   const clone = container.cloneNode(true);
-  const iframes = clone.querySelectorAll('iframe');
-  for(const ifr of iframes){
-    const src = ifr.getAttribute('src')||'';
-    let id = null; try{ const m=src.match(/\/file\/d\/([^/]+)/); if(m) id=m[1]; }catch{}
-    let direct = src;
-    if(id) direct = 'https://drive.google.com/uc?export=download&id='+id;
-    const dataUrl = await appsFetchImageAsDataUrl(direct);
-    const img = document.createElement('img');
-    img.src = dataUrl; img.style.width='100%'; img.style.height='160px'; img.style.objectFit='cover';
-    ifr.replaceWith(img);
-  }
+  // Replace all <img> with data URLs via Apps Script
   const imgs = clone.querySelectorAll('img');
   for(const img of imgs){
     const src = img.getAttribute('src') || img.getAttribute('data-src');
@@ -427,103 +433,61 @@ async function htmlToPdfBlob(container){
   await waitForFonts();
   const cloned = await toExportDomWithDataImages(container);
   const wrapper = document.createElement('div'); wrapper.style.padding='20px'; wrapper.appendChild(cloned);
-
-  const opt = { margin:0.4, image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'}, jsPDF:{unit:'in',format:'letter',orientation:'portrait'} };
-
-  // ✅ Correct chain: build → toPdf() → output blob
-  const worker = window.html2pdf().set(opt).from(wrapper).toPdf();
-  const blob = await worker.output('blob');
-
+  const opt = { margin:0.4, filename:'report.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'}, jsPDF:{unit:'in',format:'letter',orientation:'portrait'} };
+  const worker = window.html2pdf().set(opt).from(wrapper);
+  // DO NOT save() to browser — we only want the Blob for Drive
+  const blob = await worker.outputPdf('blob');
   document.documentElement.classList.remove('pdf-mode');
   return blob;
 }
 function blobToBase64(blob){
   return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result).split(',')[1]); reader.onerror=reject; reader.readAsDataURL(blob); });
 }
-
-// ===== DRIVE UPLOAD — simple POST, with fallback =====
 async function uploadPdfToDrive(filename, blob){
   const b64 = await blobToBase64(blob);
   const payload = { action:'uploadPdf', folderId: DRIVE_FOLDER_ID, filename, pdfBase64: b64 };
-
-  let res, out = null;
-  try{
-    res = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) });
-    try { out = await res.json(); } catch { out = null; }  // if CORS blocks reading, out stays null
-  }catch(e){
-    // network error -> try fire-and-forget
-    try { await fetch(APPS_SCRIPT_URL, { method:'POST', mode:'no-cors', body: JSON.stringify(payload) }); } catch {}
-    throw e;
-  }
-
-  if (out && out.ok) return out;
-
-  // If we can't read JSON (org policy), the request likely still succeeded.
-  // Surface a soft warning; caller can still proceed.
-  if (res && (res.type === 'opaque' || res.ok)) {
-    return { ok: true, fileId: null, webViewLink: `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}`, webContentLink: null, note: 'Uploaded, but response not readable (CORS).' };
-  }
-
-  throw new Error(out && out.error ? out.error : `Drive upload failed (status ${res ? res.status : 'n/a'})`);
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error(`Upload HTTP ${res.status}`);
+  const out = await res.json();
+  if(!out.ok) throw new Error(out.error || 'Upload failed');
+  return out; // {ok:true, fileId, webViewLink}
 }
-
-// ===== Actions =====
-async function saveCurrentMonthToDrive(){
-  try{
-    setError('');
-    const y = parseInt($('year').value,10);
-    const m = parseInt($('month').value,10);
-    const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
-    const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
-    const prog=$('progress');
-
-    prog.textContent = `Saving — ${filename}…`;
-    const blob = await htmlToPdfBlob(document.querySelector('#main'));
-    const result = await uploadPdfToDrive(filename, blob);
-
-    const link = result.webViewLink || `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}`;
-    prog.innerHTML = `Saved ✅ — <a href="${link}" target="_blank" rel="noopener">Open in Drive</a>`;
-  }catch(err){
-    setError(err.message||'Failed to save to Drive.');
-    $('progress').innerHTML = `Open folder: <a href="https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}" target="_blank" rel="noopener">${DRIVE_FOLDER_ID}</a>`;
-  }
+async function exportCurrentMonthToDrive(){
+  const prog=$('progress'); setError('');
+  const y = parseInt($('year').value,10);
+  const m = parseInt($('month').value,10);
+  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
+  const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
+  prog.textContent = `Building PDF — ${filename}…`;
+  const blob = await htmlToPdfBlob(document.querySelector('#main'));
+  prog.textContent = `Uploading to Drive — ${filename}…`;
+  const out = await uploadPdfToDrive(filename, blob);
+  prog.textContent = `Uploaded ✓ → ${out.webViewLink}`;
 }
-
-async function saveAllMonthsToDrive(){
-  const prog=$('progress');
-  try{
-    setError('');
-    const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
-    let total=0; for(const y of YEARS) total += (MONTHS_BY_YEAR[String(y)]||[]).length;
-    let done=0; let failures=0;
-
-    for(const y of YEARS){
-      for(const m of (MONTHS_BY_YEAR[String(y)]||[])){
-        $('year').value=String(y);
-        $('month').replaceChildren(); (MONTHS_BY_YEAR[String(y)]||[]).forEach(mm=>$('month').add(new Option(monthName(mm), String(mm)))); $('month').value=String(m);
-        $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
-        applySelection();
-
-        const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
-        prog.textContent = `Saving ${++done}/${total} — ${filename}…`;
-        try{
-          const blob = await htmlToPdfBlob(document.querySelector('#main'));
-          await uploadPdfToDrive(filename, blob);
-        }catch{ failures++; }
-      }
+async function exportAllMonths(){
+  const prog=$('progress'); setError('');
+  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
+  let total=0; for(const y of YEARS) total += (MONTHS_BY_YEAR[String(y)]||[]).length;
+  let done=0;
+  for(const y of YEARS){
+    for(const m of (MONTHS_BY_YEAR[String(y)]||[])){
+      $('year').value=String(y);
+      $('month').replaceChildren(); (MONTHS_BY_YEAR[String(y)]||[]).forEach(mm=>$('month').add(new Option(monthName(mm), String(mm)))); $('month').value=String(m);
+      $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
+      applySelection();
+      const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
+      prog.textContent = `(${++done}/${total}) Building PDF — ${filename}…`;
+      const blob = await htmlToPdfBlob(document.querySelector('#main'));
+      prog.textContent = `(${done}/${total}) Uploading — ${filename}…`;
+      await uploadPdfToDrive(filename, blob);
     }
-    const msg = failures? `Done — saved ${total-failures}/${total} PDF(s).` : `Done — saved ${total} PDF(s).`;
-    prog.innerHTML = `${msg} <a href="https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}" target="_blank" rel="noopener">Open folder</a>`;
-  }catch(err){
-    setError(err.message||'Failed to save all months to Drive.');
   }
+  prog.textContent = `Done — exported ${total} PDF(s) to Drive.`;
 }
-
-// ===== Defensive: block accidental downloads
-document.addEventListener('click', (e)=>{
-  const a = e.target.closest('a');
-  if(a && a.hasAttribute('download')){ e.preventDefault(); e.stopPropagation(); }
-});
 
 // ===== Events & boot =====
 $('lastBtn').addEventListener('click', ()=>{
@@ -535,8 +499,12 @@ $('lastBtn').addEventListener('click', ()=>{
   $('inspection').classList.add('hidden'); $('inspectionLabel').classList.add('hidden');
   applySelection();
 });
-$('saveMonthBtn').addEventListener('click', saveCurrentMonthToDrive);
-$('saveAllBtn').addEventListener('click', saveAllMonthsToDrive);
+$('exportMonthBtn').addEventListener('click', async ()=>{
+  try{ await exportCurrentMonthToDrive(); }catch(err){ console.error(err); setError(err.message||'Upload failed'); }
+});
+$('exportAllBtn').addEventListener('click', async ()=>{
+  try{ await exportAllMonths(); }catch(err){ console.error(err); setError(err.message||'Batch export failed'); }
+});
 
 async function boot(){
   setError(''); $('summaryDate').textContent='Loading…';
