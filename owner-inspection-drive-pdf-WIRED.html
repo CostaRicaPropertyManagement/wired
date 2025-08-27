@@ -1,15 +1,9 @@
-# Regenerate "owner-inspection-photos-fixed.html" with your current IDs wired in
-apps_url = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec"
-drive_folder_id = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV"
-default_csv = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv"
-
-html = r"""
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Inspection — Pixel-Perfect PDF (Photos Fixed)</title>
+<title>Owner Inspection — PDF Structured</title>
 <meta name="referrer" content="no-referrer"/>
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
@@ -46,7 +40,7 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 .ph figcaption{font-size:11px;color:#6B7280;padding:6px 8px;display:flex;justify-content:space-between;gap:6px}
 .cap-left{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cap-right{color:#374151;white-space:nowrap}
-.small{font-size:12px;color:#muted}
+.small{font-size:12px;color:var(--muted)}
 .warn{color:#9B2226}
 .donut{width:72px;height:72px}
 .tile svg text{font-size:6px;font-weight:800;fill:#111827}
@@ -55,6 +49,22 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 .ph.issue{border-color:#EF4444;box-shadow:0 0 0 2px #FECACA inset}
 .progress{font-size:12px;color:#374151}
 .pdf-mode .header .controls{display:none}
+
+/* Structured PDF styles */
+.pdf-report{max-width:800px;margin:0 auto;color:#111827}
+.pdf-report .cover{padding:40px 10px; text-align:center; border:1px solid var(--line); border-radius:12px}
+.pdf-report .meta{margin-top:12px; color:#6B7280; font-size:12px}
+.pdf-report .kpis{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:16px}
+.kpi{border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-width:140px}
+.kpi .label{font-size:11px; color:#6B7280}
+.kpi .value{font-weight:900; font-size:18px}
+.toc{border:1px dashed var(--line); border-radius:8px; padding:10px; margin:18px 0}
+.section-title{font-weight:900; margin:18px 0 8px; font-size:18px; border-left:4px solid var(--brand); padding-left:10px}
+.photo-card{border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.photo-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px} /* 2-up for print clarity */
+.avoid-break{break-inside:avoid}
+.page-break{height:0; break-after:page}
+.footer-space{height:24px}
 </style>
 </head>
 <body>
@@ -82,6 +92,7 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
         <button id="lastBtn" type="button">Last</button>
         <button id="downloadPdfBtn" type="button">Download this month (Pixel PDF)</button>
         <button id="exportAllBtn" type="button">Export ALL months → Drive (Pixel)</button>
+        <button id="downloadStructuredBtn" type="button"><b>Download structured PDF</b></button>
       </div>
     </div>
   </header>
@@ -107,12 +118,13 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 </div>
 
 <script>
-const APPS_SCRIPT_URL = "%APPS%";
-const DRIVE_FOLDER_ID = "%FOLDER%";
-const DEFAULT_CSV = "%CSV%";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec";
+const DRIVE_FOLDER_ID = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV";
+const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
 const TZ = 'America/Costa_Rica';
 
 let RAW_ROWS=[], YEARS=[], MONTHS_BY_YEAR={}, LATEST_YM={year:undefined,month:undefined};
+let CURRENT_AGG=null, CURRENT_LABEL='', CURRENT_ADDRESS='Property';
 
 const TS_KEYS=['Timestamp','timestamp','Marca temporal','marca temporal','Fecha','fecha','Fecha y hora','fecha y hora','Date','Datetime','date','datetime'];
 const META_HINTS=['email','correo','name','nombre','inspector','by who','por quién','submitted','enviado'];
@@ -124,7 +136,7 @@ const FRIENDLY={BR:'Bedroom',BD:'Bedroom',BA:'Bathroom',KT:'Kitchen',KI:'Kitchen
 const $=id=>document.getElementById(id);
 const setError=msg=>{$('errBox').textContent=msg||'';};
 const lower=s=>String(s||'').toLowerCase();
-const strip=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const strip=s=>String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
 const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 const dfmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',timeZone:TZ});
 const mfmt=new Intl.DateTimeFormat(undefined,{month:'long'});
@@ -133,14 +145,14 @@ function firstVal(row,keys){if(!row||typeof row!=='object')return;for(const k of
 function isMetaHeader(h){const l=lower(h||'');return TS_KEYS.some(k=>l===lower(k))||META_HINTS.some(hint=>l.includes(hint));}
 function isPhotoHeader(h){const s=String(h||'');const l=s.toLowerCase();const dl=strip(s).toLowerCase();return PHOTO_HINTS.some(hint=>l.includes(hint)||dl.includes(hint));}
 function isCommentOnlyHeader(h){return COMMENT_HINTS.some(hint=>lower(h||'').includes(hint));}
-function sectionKeyFromHeader(h){if(!h)return null;const m=String(h).match(/\[([A-Za-z0-9_]+)\]/);if(!m)return null;return m[1].replace(/_.*/,'');}
-function sanitizeCsvText(text){if(text&&text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');}
+function sectionKeyFromHeader(h){if(!h)return null;const m=String(h).match(/\\[([A-Za-z0-9_]+)\\]/);if(!m)return null;return m[1].replace(/_.*/,'');}
+function sanitizeCsvText(text){if(text&&text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n');}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
 function parseTimestamp(row){
   const t=firstVal(row,TS_KEYS); if(t==null||t==='')return null;
-  if(/^\d{4}-\d{2}-\d{2}/.test(t)){const d=new Date(t);return Number.isFinite(+d)?d:null;}
-  const m=String(t).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if(/^\\d{4}-\\d{2}-\\d{2}/.test(t)){const d=new Date(t);return Number.isFinite(+d)?d:null;}
+  const m=String(t).match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{2,4})(?:[ T](\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?$/);
   if(m){let a=+m[1],b=+m[2],y=+m[3];if(y<100)y+=2000;const month=a>12?b:a;const day=a>12?a:b;const hh=+(m[4]||'0'),mm=+(m[5]||'0'),ss=+(m[6]||'0');const d=new Date(y,month-1,day,hh,mm,ss);return Number.isFinite(+d)?d:null;}
   const d=new Date(t);return Number.isFinite(+d)?d:null;
 }
@@ -149,22 +161,22 @@ function deriveYM(row){const d=parseTimestamp(row);return d?{year:d.getFullYear(
 async function fetchWithTimeout(url,ms=15000){const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);try{const res=await fetch(url,{cache:'no-store',mode:'cors',signal:ctrl.signal});clearTimeout(t);return res;}catch(e){clearTimeout(t);throw e;}}
 async function loadCsv(url){let res;try{res=await fetchWithTimeout(url,15000);}catch(e){throw new Error('Network timeout or fetch blocked fetching CSV');} if(!res.ok)throw new Error(`HTTP ${res.status} fetching CSV`); const raw=await res.text(); const cleaned=sanitizeCsvText(raw); return new Promise(resolve=>{ if(!window.Papa||!window.Papa.parse){resolve([]);return;} try{ Papa.parse(cleaned,{header:true,dynamicTyping:false,skipEmptyLines:'greedy', transformHeader:h=>String(h||'').normalize('NFC'), transform:v=>String(v??''), complete:(results)=>resolve(results.data||[]) }); }catch{ resolve([]); } });}
 
-function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\s+/g,' ');return strip(t);}
-function classifyAnswer(val){ if(val==null)return'ignore'; const raw=String(val).trim(); if(!raw)return'ignore'; if(/\bhttps?:\/\//i.test(raw))return'ignore'; const tokens=normalizeToken(raw).replace(/[^a-z]+/g,' ').trim().split(/\s+/); const yes=new Set(['yes','si','y','affirmative','true']); const no=new Set(['no','n','negative','false']); const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t)); if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore'; }
+function normalizeToken(value){let t=String(value??'').trim().toLowerCase();t=t.replace(/\\s+/g,' ');return strip(t);}
+function classifyAnswer(val){ if(val==null)return'ignore'; const raw=String(val).trim(); if(!raw)return'ignore'; if(/\\bhttps?:\\/\\//i.test(raw))return'ignore'; const tokens=normalizeToken(raw).replace(/[^a-z]+/g,' ').trim().split(/\\s+/); const yes=new Set(['yes','si','y','affirmative','true']); const no=new Set(['no','n','negative','false']); const hasYes=tokens.some(t=>yes.has(t)); const hasNo=tokens.some(t=>no.has(t)); if(hasYes&&!hasNo)return'pass'; if(hasNo&&!hasYes)return'fail'; return'ignore'; }
 function aggregate(rows){
   const agg={sections:{},photos:{},details:{},overall:{passes:0,fails:0,total:0,rate:0}};
   let sawBracket=false; const headers=rows.length?Object.keys(rows[0]??{}):[]; const photoSeen=new Set();
-  function headerTokens(h){ const cleaned=String(h||'').replace(/\[[^\]]+\]\s*/,'').replace(/\b(photos?|fotos?|imagen(?:es)?|image|images|picture|pictures|pic|screenshot|url|link)\b/gi,'').replace(/[:\-–—()]/g,' '); return normalizeToken(cleaned).split(/\s+/).filter(Boolean); }
+  function headerTokens(h){ const cleaned=String(h||'').replace(/\\[[^\\]]+\\]\\s*/,'').replace(/\\b(photos?|fotos?|imagen(?:es)?|image|images|picture|pictures|pic|screenshot|url|link)\\b/gi,'').replace(/[:\\-–—()]/g,' '); return normalizeToken(cleaned).split(/\\s+/).filter(Boolean); }
   const tokenCache=new Map(); const tok=h=>{ if(!tokenCache.has(h)) tokenCache.set(h,headerTokens(h)); return tokenCache.get(h); };
   const overlap=(a,b)=>{ const sb=new Set(b); let n=0; for(const t of a) if(sb.has(t)) n++; return n; };
-  function splitUrls(val){ let s=String(val||'').replace(/\bwww\.[^\s,;|)\]>]+/gi,m=>'https://'+m); const out=[]; const re=/(https?:\/\/[^\s<>"\)\],;|]+)(?=[\s<>"\)\],;|]|$)/gi; let m; while((m=re.exec(s))){ let u=m[1].replace(/[\)\],;.!?]+$/,'').replace(/^http:/i,'https:'); out.push(u);} return out; }
+  function splitUrls(val){ let s=String(val||'').replace(/\\bwww\\.[^\\s,;|)\\]>]+/gi,m=>'https://'+m); const out=[]; const re=/(https?:\\/\\/[^\\s<>"\\)\\],;|]+)(?=[\\s<>"\\)\\],;|]|$)/gi; let m; while((m=re.exec(s))){ let u=m[1].replace(/[\\)\\],;.!?]+$/,'').replace(/^http:/i,'https:'); out.push(u);} return out; }
   for(const row of rows){
     const ts=parseTimestamp(row)||new Date();
     const rowQs=[]; const rowPics=[];
     for(const h of headers){
       if(isMetaHeader(h)) continue;
       const val=row[h]; const code=sectionKeyFromHeader(h); if(code) sawBracket=true; const key=code||'ALL';
-      if(isPhotoHeader(h)){ const rawUrls=splitUrls(val); const urls=rawUrls.map(normalizeImageUrl); if(urls.length) rowPics.push({key,header:h,tokens:tok(h),urls}); continue; }
+      if(isPhotoHeader(h)){ const rawUrls=splitUrls(val); const urls=rawUrls.map(u=>u); if(urls.length) rowPics.push({key,header:h,tokens:tok(h),urls}); continue; }
       if(isCommentOnlyHeader(h)) continue;
       const cls=classifyAnswer(val); if(cls==='ignore') continue;
       (agg.sections[key]??={passes:0,fails:0,total:0});
@@ -195,7 +207,7 @@ function normalizeImageUrl(u){
   try{
     let url = new URL(u);
     if (url.hostname === 'drive.google.com') {
-      const m = url.pathname.match(/\/file\/d\/([^/]+)/);
+      const m = url.pathname.match(/\\/file\\/d\\/([^/]+)/);
       if (m && m[1]) return 'https://drive.google.com/uc?export=view&id=' + m[1];
       const id = url.searchParams.get('id');
       if (id) return 'https://drive.google.com/uc?export=view&id=' + id;
@@ -204,14 +216,14 @@ function normalizeImageUrl(u){
       url.searchParams.set('dl','1');
       return url.toString();
     }
-    if(/^http:\/\//i.test(u)) return u.replace(/^http:/i,'https:');
+    if(/^http:\\/\\//i.test(u)) return u.replace(/^http:/i,'https:');
     return u;
   }catch(e){ return u; }
 }
 function toDrivePreviewIframe(u){
   try{
     if(!u.includes('drive.google.com')) return null;
-    const m = u.match(/\/file\/d\/([^/]+)\//);
+    const m = u.match(/\\/file\\/d\\/([^/]+)\\//);
     let id = m ? m[1] : null;
     if(!id){ const url = new URL(u); id = url.searchParams.get('id'); }
     return id ? ('https://drive.google.com/file/d/'+id+'/preview') : null;
@@ -278,7 +290,7 @@ function renderPhotos(agg){
       const right=document.createElement('span'); right.className='cap-right'; right.textContent=dfmt.format(ts);
       cap.append(left,right); fig.append(img,cap); g.appendChild(fig);
     }
-    sec.append(h,g); frag.appendChild(sec);
+    sec.appendChild(h); sec.appendChild(g); frag.appendChild(sec);
   }
   wrap.appendChild(frag);
 }
@@ -305,7 +317,11 @@ function deriveAddress(rows){
   if(!rows||!rows.length) return '';
   const headers=Object.keys(rows[0]||{}); let addrCol=headers.find(h=>ADDRESS_HINTS.some(hint=>lower(h).includes(hint)))||'';
   if(!addrCol){ addrCol=headers.find(h=>/property|propiedad/i.test(h))||''; }
-  if(addrCol){ for(const r of rows){ const v=r[addrCol]; if(v&&String(v).trim()) return String(v).trim(); } }
+  if(addrCol){ for(const r of rows){
+      const v=r[addrCol];
+      if(v&&String(v).trim()) return String(v).trim();
+    }
+  }
   return '';
 }
 function buildIndex(rows){
@@ -363,32 +379,35 @@ function applySelection(){
   const label=monthRows.length?`${monthName(m)} ${y}${(!iSel.classList.contains('hidden')&&iSel.value!=='all')?' — '+iSel.options[iSel.selectedIndex].text:''}`:'No data';
   $('summaryDate').textContent=label;
 
+  CURRENT_AGG = agg;
+  CURRENT_LABEL = label;
+
   renderTiles(agg);
   renderPhotos(agg);
   renderIssuesSummary(agg);
 }
 
+// ===== CSV boot =====
 function getCsvUrlFromParams(){ const params=new URLSearchParams(location.search); const p=(params.get('csv')||'').trim(); return p || DEFAULT_CSV; }
-async function loadAndRender(){
+async function boot(){
   setError(''); $('summaryDate').textContent='Loading…';
   try{
     const url=new URL(getCsvUrlFromParams()); url.searchParams.set('_ts_', Date.now());
     RAW_ROWS=await loadCsv(url.toString());
-    if(!RAW_ROWS.length){ setError('No data rows found in CSV.'); }
+    if(!RAW_ROWS.length) setError('No data rows found in CSV.');
 
     const addrParams=new URLSearchParams(location.search);
     const addr=addrParams.get('address')||addrParams.get('addr');
     const address=(addr&&addr.trim())?addr.trim():deriveAddress(RAW_ROWS);
     if(address){
+      CURRENT_ADDRESS = address;
       document.title=`Owner Inspection — ${address}`;
       const h1=$('pageTitle'); if(h1) h1.textContent=`Owner Inspection — ${address} — Year / Month`;
     }
 
     buildIndex(RAW_ROWS);
     populateSelectors();
-    if (YEARS.length){ applySelection(); } else {
-      $('summaryDate').textContent = 'No dated rows';
-    }
+    if (YEARS.length){ applySelection(); } else { $('summaryDate').textContent = 'No dated rows'; }
   }catch(err){
     console.error(err);
     setError(err.message||'Failed to load');
@@ -396,6 +415,7 @@ async function loadAndRender(){
   }
 }
 
+// ===== Pixel-perfect export (existing) =====
 function waitForFonts(){ return document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(); }
 async function appsFetchImageAsDataUrl(url){
   try{
@@ -414,7 +434,7 @@ async function toExportDomWithDataImages(container){
   for(const ifr of iframes){
     const src = ifr.getAttribute('src')||'';
     let fileId = null;
-    try{ const m = src.match(/\/file\/d\/([^/]+)/); if(m) fileId=m[1]; }catch{}
+    try{ const m = src.match(/\\/file\\/d\\/([^/]+)/); if(m) fileId=m[1]; }catch{}
     let direct = src;
     if(fileId) direct = 'https://drive.google.com/uc?export=download&id='+fileId;
     const dataUrl = await appsFetchImageAsDataUrl(direct);
@@ -466,7 +486,7 @@ async function uploadPdfToDrive(filename, blob){
 async function downloadCurrentPdf(){
   const y = parseInt($('year').value,10);
   const m = parseInt($('month').value,10);
-  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
+  const address = CURRENT_ADDRESS || 'Property';
   const filename = `${address} — ${y}-${String(m).padStart(2,'0')}.pdf`;
   const blob = await htmlToPdfBlob(document.querySelector('#main'));
   const a = document.createElement('a');
@@ -474,7 +494,7 @@ async function downloadCurrentPdf(){
 }
 async function exportAllMonths(){
   const prog=$('progress');
-  const address = ($('pageTitle').textContent||'Property').split(' — ')[1] || 'Property';
+  const address = CURRENT_ADDRESS || 'Property';
   let total=0; for(const y of YEARS) total += (MONTHS_BY_YEAR[String(y)]||[]).length;
   let done=0;
   for(const y of YEARS){
@@ -492,6 +512,129 @@ async function exportAllMonths(){
   prog.textContent = `Done — exported ${total} PDF(s) to Drive.`;
 }
 
+// ===== Structured PDF builder =====
+function makeDonutSvg(percent){
+  const pct = clamp(Math.round(percent||0),0,100);
+  const dash = `${pct},${100-pct}`;
+  const stroke = donutStrokeColor(pct);
+  const svgNS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('class','donut'); svg.setAttribute('viewBox','0 0 36 36');
+  const c1=document.createElementNS(svgNS,'circle'); c1.setAttribute('cx','18'); c1.setAttribute('cy','18'); c1.setAttribute('r','15.915'); c1.setAttribute('fill','none'); c1.setAttribute('stroke','#EAEFF5'); c1.setAttribute('stroke-width','3.8'); svg.appendChild(c1);
+  const c2=document.createElementNS(svgNS,'circle'); c2.setAttribute('cx','18'); c2.setAttribute('cy','18'); c2.setAttribute('r','15.915'); c2.setAttribute('fill','none'); c2.setAttribute('stroke',stroke); c2.setAttribute('stroke-width','3.8'); c2.setAttribute('stroke-linecap','round'); c2.setAttribute('stroke-dasharray',dash); svg.appendChild(c2);
+  const t=document.createElementNS(svgNS,'text'); t.setAttribute('x','18'); t.setAttribute('y','20'); t.setAttribute('text-anchor','middle'); t.textContent=pct+'%'; svg.appendChild(t);
+  return svg;
+}
+
+function buildStructuredReport(agg, meta){
+  const container = document.createElement('div');
+  container.className = 'pdf-report';
+  // Cover
+  const cover = document.createElement('section'); cover.className='cover';
+  const h1=document.createElement('h1'); h1.textContent='Owner Inspection Report'; cover.appendChild(h1);
+  const h2=document.createElement('h2'); h2.textContent=meta.address; cover.appendChild(h2);
+  const h3=document.createElement('div'); h3.className='meta'; h3.textContent=meta.label; cover.appendChild(h3);
+  const meta2=document.createElement('div'); meta2.className='meta'; meta2.textContent='Generated '+(new Date()).toLocaleString(); cover.appendChild(meta2);
+  const kpis=document.createElement('div'); kpis.className='kpis';
+  const k1=document.createElement('div'); k1.className='kpi'; k1.innerHTML='<div class="label">Pass rate</div><div class="value">'+Math.round(agg.overall.rate)+'%</div>'; k1.appendChild(makeDonutSvg(agg.overall.rate));
+  const k2=document.createElement('div'); k2.className='kpi'; k2.innerHTML='<div class="label">Checks</div><div class="value">'+agg.overall.total+'</div>';
+  const k3=document.createElement('div'); k3.className='kpi'; k3.innerHTML='<div class="label">Issues</div><div class="value">'+Object.values(agg.sections).reduce((n,s)=>n+s.fails,0)+'</div>';
+  kpis.append(k1,k2,k3); cover.appendChild(kpis);
+  container.appendChild(cover);
+
+  // TOC
+  const toc = document.createElement('div'); toc.className='toc';
+  const tocTitle = document.createElement('div'); tocTitle.style.fontWeight='900'; tocTitle.textContent='Contents'; toc.appendChild(tocTitle);
+  const list = document.createElement('ol');
+  ['Summary','Issues','Photos by section'].forEach(t=>{ const li=document.createElement('li'); li.textContent=t; list.appendChild(li); });
+  toc.appendChild(list);
+  container.appendChild(toc);
+
+  // Summary (clone tiles)
+  const summarySec=document.createElement('section');
+  const sumTitle=document.createElement('div'); sumTitle.className='section-title'; sumTitle.textContent='Summary'; summarySec.appendChild(sumTitle);
+  const tilesClone = document.getElementById('tiles').cloneNode(true);
+  tilesClone.querySelectorAll('a').forEach(a=>a.removeAttribute('href'));
+  summarySec.appendChild(tilesClone);
+  container.appendChild(summarySec);
+
+  // Issues
+  const issuesSec=document.createElement('section');
+  const issTitle=document.createElement('div'); issTitle.className='section-title'; issTitle.textContent='Issues'; issuesSec.appendChild(issTitle);
+  const cats=Object.keys(agg.details||{}).filter(k=>(agg.details[k]||[]).some(item=>!item.pass)).sort();
+  if(!cats.length){
+    const p=document.createElement('p'); p.textContent='No issues found — all checks passed.'; issuesSec.appendChild(p);
+  } else {
+    for(const k of cats){
+      const h=document.createElement('h4'); h.textContent=sectionName(k); issuesSec.appendChild(h);
+      const ul=document.createElement('ul');
+      const grouped=new Map();
+      for(const item of (agg.details[k]||[])){ if(item.pass) continue; const key=`${item.question} — ${String(item.answer)}`; grouped.set(key,(grouped.get(key)||0)+1); }
+      for(const [txt,count] of grouped){ const li=document.createElement('li'); li.textContent=count>1?`${txt} (x${count})`:txt; ul.appendChild(li); }
+      issuesSec.appendChild(ul);
+    }
+  }
+  container.appendChild(issuesSec);
+
+  // Photos by section (flagged first)
+  const photosSec=document.createElement('section');
+  const phoTitle=document.createElement('div'); phoTitle.className='section-title'; phoTitle.textContent='Photos by section'; photosSec.appendChild(phoTitle);
+  const keys=Object.keys(agg.photos).sort();
+  for(const k of keys){
+    const secTitle=document.createElement('h3'); secTitle.textContent=sectionName(k)+` (${(agg.photos[k]||[]).length})`; photosSec.appendChild(secTitle);
+    const flagged=(agg.photos[k]||[]).filter(p=>p.flagged);
+    const others=(agg.photos[k]||[]).filter(p=>!p.flagged);
+    function addGrid(items,label){
+      if(!items.length) return;
+      const sub=document.createElement('div'); sub.style.fontWeight='700'; sub.style.margin='8px 0 6px'; sub.textContent=label; photosSec.appendChild(sub);
+      const grid=document.createElement('div'); grid.className='photo-grid';
+      for(const it of items){
+        const fig=document.createElement('figure'); fig.className='photo-card avoid-break';
+        const img=document.createElement('img'); img.alt=sectionName(k)+' photo'; img.src=normalizeImageUrl(it.url); fig.appendChild(img);
+        const cap=document.createElement('figcaption'); cap.style.fontSize='11px'; cap.style.color='#6B7280'; cap.textContent=dfmt.format(it.ts)+(it.flagged?' — Issue':'');
+        fig.appendChild(cap); grid.appendChild(fig);
+      }
+      photosSec.appendChild(grid);
+    }
+    addGrid(flagged,'Flagged');
+    addGrid(others,'Other');
+    const pb=document.createElement('div'); pb.className='page-break'; photosSec.appendChild(pb);
+  }
+  container.appendChild(photosSec);
+
+  const footSpace=document.createElement('div'); footSpace.className='footer-space'; container.appendChild(footSpace);
+  return container;
+}
+
+async function generateStructuredPdf(){
+  if(!CURRENT_AGG){ alert('Load data first.'); return; }
+  const meta={ address: CURRENT_ADDRESS || 'Property', label: CURRENT_LABEL || '' };
+  const reportDom = buildStructuredReport(CURRENT_AGG, meta);
+  const reportWithImages = await toExportDomWithDataImages(reportDom);
+
+  const opt = { margin: 0.5, image: { type: 'jpeg', quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor:'#ffffff' }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' } };
+  const worker = html2pdf().set(opt).from(reportWithImages).toPdf();
+  const pdf = await worker.get('pdf');
+  const total = pdf.internal.getNumberOfPages();
+  const address = meta.address;
+  const label = meta.label;
+  const header = `Owner Inspection — ${address} — ${label}`;
+
+  for(let i=1;i<=total;i++){
+    pdf.setPage(i);
+    const w = pdf.internal.pageSize.getWidth();
+    const h = pdf.internal.pageSize.getHeight();
+    pdf.setFontSize(9);
+    pdf.text(header, w/2, 0.35, {align:'center'});
+    pdf.text(`Page ${i} of ${total}`, w/2, h-0.35, {align:'center'});
+  }
+  const y = parseInt($('year').value,10);
+  const m = parseInt($('month').value,10);
+  const filename = `${address} — structured — ${y}-${String(m).padStart(2,'0')}.pdf`;
+
+  pdf.save(filename);
+}
+
+// ===== Events & boot =====
 $('lastBtn').addEventListener('click', ()=>{
   if(!LATEST_YM.year||!LATEST_YM.month) return;
   const ySel=$('year'), mSel=$('month');
@@ -503,36 +646,9 @@ $('lastBtn').addEventListener('click', ()=>{
 });
 $('downloadPdfBtn').addEventListener('click', downloadCurrentPdf);
 $('exportAllBtn').addEventListener('click', exportAllMonths);
+$('downloadStructuredBtn').addEventListener('click', generateStructuredPdf);
 
-async function boot(){
-  setError(''); $('summaryDate').textContent='Loading…';
-  try{
-    const params=new URLSearchParams(location.search);
-    const csv = (params.get('csv')||'').trim() || DEFAULT_CSV;
-    const url=new URL(csv); url.searchParams.set('_ts_', Date.now());
-    RAW_ROWS=await loadCsv(url.toString());
-    if(!RAW_ROWS.length) setError('No data rows found in CSV.');
-
-    const addrParam = params.get('address')||params.get('addr');
-    const address = (addrParam && addrParam.trim()) ? addrParam.trim() : deriveAddress(RAW_ROWS);
-    if(address){ document.title = `Owner Inspection — ${address}`; $('pageTitle').textContent = `Owner Inspection — ${address} — Year / Month`; }
-
-    buildIndex(RAW_ROWS);
-    populateSelectors();
-    if(YEARS.length){ applySelection(); } else { $('summaryDate').textContent='No dated rows'; }
-  }catch(err){
-    console.error(err); setError(err.message||'Failed to load'); $('summaryDate').textContent='Failed to load';
-  }
-}
 window.addEventListener('DOMContentLoaded', boot);
 </script>
 </body>
 </html>
-"""
-html = html.replace("%APPS%", apps_url).replace("%FOLDER%", drive_folder_id).replace("%CSV%", default_csv)
-
-out = "/mnt/data/owner-inspection-photos-fixed.html"
-with open(out, "w", encoding="utf-8") as f:
-    f.write(html)
-
-out
