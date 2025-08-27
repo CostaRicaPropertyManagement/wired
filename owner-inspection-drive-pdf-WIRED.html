@@ -118,6 +118,28 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #256
 </div>
 
 <script>
+
+window.addEventListener('error', (e)=>{
+  try {
+    const msg = (e && e.message) ? e.message : String(e);
+    const box = document.getElementById('errBox');
+    if (box) box.textContent = 'Script error: ' + msg;
+    const s = document.getElementById('summaryDate');
+    if (s) s.textContent = 'Failed to load';
+    console.error('Global error:', e);
+  } catch {}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try {
+    const msg = (e && e.reason && e.reason.message) ? e.reason.message : (e && e.reason ? String(e.reason) : String(e));
+    const box = document.getElementById('errBox');
+    if (box) box.textContent = 'Load error: ' + msg;
+    const s = document.getElementById('summaryDate');
+    if (s) s.textContent = 'Failed to load';
+    console.error('Unhandled rejection:', e);
+  } catch {}
+});
+
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxGbK0v6k15wxh0m48MjVy_3zqU4KbJ65kwXHU5ag2PzaBPanCvsK2eSHfQHCTXog0ZZw/exec";
 const DRIVE_FOLDER_ID = "1xtjpkFnhmkmz5xAfQMvEEzGvWLyYIKrV";
 const DEFAULT_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTH18JY92PQUibhQfTwhTcJZpEEuz-NrBbe4fUWAB0lSCT2tY-X9GwIVEQhr8XCHEH08EHfq3vav1Td/pub?output=csv";
@@ -141,7 +163,7 @@ const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^
 const dfmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',timeZone:TZ});
 const mfmt=new Intl.DateTimeFormat(undefined,{month:'long'});
 function monthName(m){return mfmt.format(new Date(2000,m-1,1));}
-function firstVal(row,keys){if(!row||typeof row!=='object')return;for(const k of keys){if(Object.hasOwn(row,k)){const v=row[k];if(v!=null&&String(v).trim()!=='')return v;}}}
+function firstVal(row,keys){if(!row||typeof row!=='object')return;for(const k of keys){if(Object.prototype.hasOwnProperty.call(row,k)){const v=row[k];if(v!=null&&String(v).trim()!=='')return v;}}}
 function isMetaHeader(h){const l=lower(h||'');return TS_KEYS.some(k=>l===lower(k))||META_HINTS.some(hint=>l.includes(hint));}
 function isPhotoHeader(h){const s=String(h||'');const l=s.toLowerCase();const dl=strip(s).toLowerCase();return PHOTO_HINTS.some(hint=>l.includes(hint)||dl.includes(hint));}
 function isCommentOnlyHeader(h){return COMMENT_HINTS.some(hint=>lower(h||'').includes(hint));}
